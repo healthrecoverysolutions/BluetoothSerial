@@ -232,7 +232,6 @@ public class BluetoothSerial extends CordovaPlugin {
         } else if (action.equals(SET_NAME)) {
 
             String newName = args.getString(0);
-            Log.d(TAG, "new Name" + newName);
             bluetoothAdapter.setName(newName);
             callbackContext.success();
 
@@ -341,7 +340,6 @@ public class BluetoothSerial extends CordovaPlugin {
     private void connect(CordovaArgs args, boolean secure, CallbackContext callbackContext) throws JSONException {
         String macAddress = args.getString(0);
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
-        Log.d(TAG, "connecting bluetooth serial ARGS 223" + args);
 
         if (device != null) {
             connectCallback = callbackContext;

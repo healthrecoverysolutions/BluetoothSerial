@@ -378,7 +378,6 @@ public class BluetoothSerialService {
 
                 // If a connection was accepted
                 if (socket != null) {
-                    Log.d(TAG, "TESTING STATE" + mState);
                     synchronized (BluetoothSerialService.this) {
                         switch (mState) {
                             case STATE_LISTEN:
@@ -429,7 +428,6 @@ public class BluetoothSerialService {
             mmDevice = device;
             BluetoothSocket tmp = null;
             mSocketType = secure ? "Secure" : "Insecure";
-            Log.d(TAG, "DO I ALREADY HAVE A SOCKET?!" + mmSocket);
 
             // Get a BluetoothSocket for a connection with the given BluetoothDevice
             if (
@@ -450,7 +448,6 @@ public class BluetoothSerialService {
                 mmSocket = tmp;
             } else {
                 try {
-                    Log.i(TAG, "TMP TMP TMP" + mmDevice);
                     tmp = mmDevice.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
                     mAdapter.cancelDiscovery();
                     tmp.connect();
@@ -721,7 +718,7 @@ public class BluetoothSerialService {
         }
 
         public void run() {
-            Log.i(TAG, "BEGIN mConnectedThread reading bytes");
+            Log.d(TAG, "ConnectedThread reading bytes");
             byte[] buffer = new byte[1024];
             int bytes;
 
@@ -730,7 +727,6 @@ public class BluetoothSerialService {
                 try {
                     // Read from the InputStream
                     bytes = mmInStream.read(buffer);
-//                    Log.i(TAG, "BYTES" + bytes);
                     String data = new String(buffer, 0, bytes);
 
                     // Send the new data String to the UI Activity
