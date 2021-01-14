@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.provider.Settings;
@@ -22,6 +23,7 @@ import org.apache.cordova.LOG;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import java.util.concurrent.TimeUnit;
 
 import java.util.Set;
 
@@ -165,7 +167,6 @@ public class BluetoothSerial extends CordovaPlugin {
             callbackContext.success();
 
         } else if (action.equals(SUBSCRIBE_RAW)) {
-
             rawDataAvailableCallback = callbackContext;
 
             PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
@@ -231,6 +232,7 @@ public class BluetoothSerial extends CordovaPlugin {
         } else if (action.equals(SET_NAME)) {
 
             String newName = args.getString(0);
+            Log.d(TAG, "new Name" + newName);
             bluetoothAdapter.setName(newName);
             callbackContext.success();
 
@@ -301,7 +303,7 @@ public class BluetoothSerial extends CordovaPlugin {
                 if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                     try {
-                    	JSONObject o = deviceToJSON(device);
+                        JSONObject o = deviceToJSON(device);
                         unpairedDevices.put(o);
                         if (ddc != null) {
                             PluginResult res = new PluginResult(PluginResult.Status.OK, o);
@@ -339,9 +341,11 @@ public class BluetoothSerial extends CordovaPlugin {
     private void connect(CordovaArgs args, boolean secure, CallbackContext callbackContext) throws JSONException {
         String macAddress = args.getString(0);
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+        Log.d(TAG, "connecting bluetooth serial ARGS 223" + args);
 
         if (device != null) {
             connectCallback = callbackContext;
+            bluetoothSerialService.start(device);
             bluetoothSerialService.connect(device, secure);
             buffer.setLength(0);
 
@@ -359,23 +363,24 @@ public class BluetoothSerial extends CordovaPlugin {
     // Consider replacing with normal callbacks
     private final Handler mHandler = new Handler() {
 
-         public void handleMessage(Message msg) {
-             switch (msg.what) {
-                 case MESSAGE_READ:
-                    buffer.append((String)msg.obj);
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case MESSAGE_READ:
+                    String bundle = msg.obj.toString();
+                    Log.d(TAG, bundle);
 
                     if (dataAvailableCallback != null) {
-                        sendDataToSubscriber();
+                        sendDataToSubscriber(bundle);
                     }
 
                     break;
-                 case MESSAGE_READ_RAW:
+                case MESSAGE_READ_RAW:
                     if (rawDataAvailableCallback != null) {
                         byte[] bytes = (byte[]) msg.obj;
                         sendRawDataToSubscriber(bytes);
                     }
                     break;
-                 case MESSAGE_STATE_CHANGE:
+                case MESSAGE_STATE_CHANGE:
 
                     if(D) Log.i(TAG, "MESSAGE_STATE_CHANGE: " + msg.arg1);
                     switch (msg.arg1) {
@@ -395,9 +400,9 @@ public class BluetoothSerial extends CordovaPlugin {
                     }
                     break;
                 case MESSAGE_WRITE:
-                    //  byte[] writeBuf = (byte[]) msg.obj;
-                    //  String writeMessage = new String(writeBuf);
-                    //  Log.i(TAG, "Wrote: " + writeMessage);
+                    byte[] writeBuf = (byte[]) msg.obj;
+                    String writeMessage = new String(writeBuf);
+                    Log.i(TAG, "Wrote: " + writeMessage);
                     break;
                 case MESSAGE_DEVICE_NAME:
                     Log.i(TAG, msg.getData().getString(DEVICE_NAME));
@@ -406,8 +411,8 @@ public class BluetoothSerial extends CordovaPlugin {
                     String message = msg.getData().getString(TOAST);
                     notifyConnectionLost(message);
                     break;
-             }
-         }
+            }
+        }
     };
 
     private void notifyConnectionLost(String error) {
@@ -433,14 +438,11 @@ public class BluetoothSerial extends CordovaPlugin {
         }
     }
 
-    private void sendDataToSubscriber() {
-        String data = readUntil(delimiter);
-        if (data != null && data.length() > 0) {
+    private void sendDataToSubscriber(String data) {
+        if (data != null) {
             PluginResult result = new PluginResult(PluginResult.Status.OK, data);
             result.setKeepCallback(true);
             dataAvailableCallback.sendPluginResult(result);
-
-            sendDataToSubscriber();
         }
     }
 
@@ -475,7 +477,7 @@ public class BluetoothSerial extends CordovaPlugin {
                 this.permissionCallback.sendPluginResult(new PluginResult(
                         PluginResult.Status.ERROR,
                         "Location permission is required to discover unpaired devices.")
-                    );
+                );
                 return;
             }
         }
