@@ -828,7 +828,6 @@ public class BluetoothSerialService {
         String datastr = "";
         while (i < dataBPPacketSize) {
             datastr = datastr + (char) in.read();
-            Log.d(TAG, "data str!!!" + datastr);
             i++;
         }
 
