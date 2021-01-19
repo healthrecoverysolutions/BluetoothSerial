@@ -112,7 +112,7 @@ public class BluetoothSerialService {
         if (D) Log.d(TAG, "start");
         if (
             // this is specifically for the A&D devices for the SPP listener mode
-                device != null && (device.getName().contains("UC-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
+                device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
         ) {
             startBluetoothSPPListener(device);
         } else {
@@ -160,7 +160,7 @@ public class BluetoothSerialService {
                                         String deviceAddr = btDevice.getAddress();
                                         //found connected device profile, get results
                                         Log.d(TAG, "Bluetooth device found, processing data..." + btDevice.getName());
-                                        if (btDevice.getName().contains("UC-767")) {
+                                        if (btDevice.getName().contains("UA-767")) {
                                             deviceType = "bloodpressure";
                                         } else if (btDevice.getName().contains("UC-355") || btDevice.getName().contains("UC-351") ) {
                                             deviceType = "scale";
@@ -239,7 +239,7 @@ public class BluetoothSerialService {
 
         // Start the thread to manage the connection and perform transmissions
         if (
-                !device.getName().contains("UC-767") &&
+                !device.getName().contains("UA-767") &&
                         !device.getName().contains("UC-355") &&
                         !device.getName().contains("UC-351")
         ) {
@@ -431,7 +431,7 @@ public class BluetoothSerialService {
 
             // Get a BluetoothSocket for a connection with the given BluetoothDevice
             if (
-                    !device.getName().contains("UC-767") &&
+                    !device.getName().contains("UA-767") &&
                             !device.getName().contains("UC-355") &&
                             !device.getName().contains("UC-351")
             ) {
@@ -463,7 +463,7 @@ public class BluetoothSerialService {
             setName("ConnectThread" + mSocketType);
 
             if (
-                    !mmDevice.getName().contains("UC-767") &&
+                    !mmDevice.getName().contains("UA-767") &&
                             !mmDevice.getName().contains("UC-355") &&
                             !mmDevice.getName().contains("UC-351")
             ) {
@@ -831,23 +831,11 @@ public class BluetoothSerialService {
             i++;
         }
 
-        //break down reading str
-        String validstr=datastr.substring(0,2);
-        String sysdiffstr=datastr.substring(2,4);
-        String diastr=datastr.substring(4,6);
-        String hrstr=datastr.substring(6,8);
-        String mapstr=datastr.substring(8,10);
+        Log.d(TAG,"Datastring for blood pressure packet " + datastr);
 
-        int sysdiff=Integer.parseInt(sysdiffstr, 16);
-        int dia=Integer.parseInt(diastr, 16);
-        int sys=dia+sysdiff;
-        int hr=Integer.parseInt(hrstr,16);
-        int map=Integer.parseInt(mapstr,16);
-
-        Log.d(TAG, "SYSTOLIC" + sys);
-        Log.d(TAG, "Diasolic" + dia);
-        Log.d(TAG, "hearrate" + hr);
-        // Todo Finish this for BP 767 --> this was just kicking it off
+        Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_READ);
+        msg.obj = datastr;
+        mHandler.sendMessage(msg);
     }
 
     private void sendAcknowledgement(){
