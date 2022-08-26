@@ -28,6 +28,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import java.util.Set;
@@ -67,6 +68,8 @@ public class BluetoothSerial extends CordovaPlugin {
     private CallbackContext rawDataAvailableCallback;
     private CallbackContext enableBluetoothCallback;
     private CallbackContext deviceDiscoveredCallback;
+
+    private BluetoothBroadcastReceiver actionFoundReceiver;
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothSerialService bluetoothSerialService;
@@ -114,6 +117,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
         if (bluetoothSerialService == null) {
             bluetoothSerialService = new BluetoothSerialService(mHandler);
+            registerStateChangeReceiver(cordova.getContext());
         }
 
         boolean validAction = true;
@@ -432,6 +436,7 @@ public class BluetoothSerial extends CordovaPlugin {
                     switch (msg.arg1) {
                         case BluetoothSerialService.STATE_CONNECTED:
                             Log.i(TAG, "BluetoothSerialService.STATE_CONNECTED");
+//                            notifyConnectionSuccess("CONNECTED");
                             notifyConnectionSuccess();
                             break;
                         case BluetoothSerialService.STATE_CONNECTING:
@@ -470,11 +475,19 @@ public class BluetoothSerial extends CordovaPlugin {
 
     private void notifyConnectionSuccess() {
         if (connectCallback != null) {
-            PluginResult result = new PluginResult(PluginResult.Status.OK);
+            PluginResult result = new PluginResult(PluginResult.Status.OK); //nehal  if paired -> PAIRED; OK -> connected
             result.setKeepCallback(true);
             connectCallback.sendPluginResult(result);
         }
     }
+
+//    private void notifyConnectionSuccess(String data) {
+//        if (connectCallback != null) {
+//            PluginResult result = new PluginResult(PluginResult.Status.OK, data); //nehal  if paired -> PAIRED; OK -> connected
+//            result.setKeepCallback(true);
+//            connectCallback.sendPluginResult(result);
+//        }
+//    }
 
     private void sendRawDataToSubscriber(byte[] data) {
         if (data != null && data.length > 0) {
@@ -546,6 +559,118 @@ public class BluetoothSerial extends CordovaPlugin {
             }
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+
+    }
+
+        public void registerStateChangeReceiver(Context context) {
+
+
+        //nehal
+        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        // filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+        // filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+        // filter.addAction(BluetoothDevice.ACTION_FOUND);
+        actionFoundReceiver = new BluetoothBroadcastReceiver();
+        context.registerReceiver(actionFoundReceiver, filter);
+    }
+
+    /**
+     * Broadcast receiver listening to bluetooth connection and pairing actions
+     */
+    private class BluetoothBroadcastReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            try {
+                String action = intent.getAction();
+                Bundle bundle = intent.getExtras();
+
+                /* Logging of actions received for debugging purpose */
+                if (!BluetoothDevice.ACTION_FOUND.equals(action) && bundle != null) {
+                    for (String key : bundle.keySet()) {
+                        Log.d(TAG, String.format("======%s :  %s--%s", action, key,
+                            bundle.get(key) != null ? Objects.requireNonNull(bundle.get(key)).toString() : "null"));
+                    }
+                }
+
+                if (action == null) return;
+
+                switch (action) {
+                    case BluetoothDevice.ACTION_BOND_STATE_CHANGED:
+                        Log.d(TAG, "ACTION_BOND_STATE_CHANGED");
+                        onPairingStateChanged(Objects.requireNonNull(bundle), intent);
+                        break;
+
+//                    case BluetoothAdapter.ACTION_DISCOVERY_FINISHED:
+//                        Log.d(TAG, "ACTION_DISCOVERY_FINISHED");
+//                        if (isDeviceDiscoveryInProcess && mBluetoothDevice == null && !mBluetoothAdapter.isDiscovering()) {
+//                            Logger.log(true, "i", TAG, "Device was not found, restart discovery to keep trying till timeout");
+//                            mBluetoothAdapter.startDiscovery();
+//                        }
+//                        mListener.onDiscoveryFinished();
+//                        break;
+//
+//                    case BluetoothDevice.ACTION_FOUND:
+//                        onDeviceFound(intent);
+//                        break;
+                    default:
+                        break;
+                }
+            } catch (Exception e) {
+                Log.d(TAG,
+                    "Exception onReceive in Device paired with the sensor" + e);
+                //    cancelDeviceDiscovery();
+                //    mListener.onPairingError(FailureReason.EXCEPTION);
+            }
+        }
+BluetoothDevice mBluetoothDevice;
+        /**
+         * Handling of pairing/bonding state changes action
+         * BOND_NONE       --> BOND_BONDING: Pairing started
+         * BOND_BONDING    --> BOND_NONE   : Pairing error, as pairing was not completed to BOND_BONDED status
+         * BOND_BONDING    --> BOND_BONDED : Pairing completed
+         *
+         * @param bundle broadcast bundle
+         **/
+        private void onPairingStateChanged(Bundle bundle, Intent intent) {
+            if(mBluetoothDevice==null){
+                mBluetoothDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            }
+            int newBondState = bundle.getInt(BluetoothDevice.EXTRA_BOND_STATE);
+            int previousBondState = bundle.getInt(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE);
+            Log.d(TAG, "Previous bond state: " + previousBondState + " ---> New bond state: " + newBondState);
+            String deviceInfoLog =  " | " + mBluetoothDevice.getName() + "| MACId: " + mBluetoothDevice.getAddress();
+            switch (newBondState) {
+                case BluetoothDevice.BOND_NONE:
+                    /* Possible pairing failed case as Pairing state changed from BOND_BONDING to BOND_NONE */
+                    if (previousBondState == BluetoothDevice.BOND_BONDING) {
+                        Log.d(TAG, "********** Possible pairing failed as pairing state changed from BOND_BONDING to BOND_NONE **********");
+                       // cancelDeviceDiscovery();
+                        //  mListener.onPairingError(FailureReason.FAILED);
+                    }
+                    break;
+
+                case BluetoothDevice.BOND_BONDING:
+                    /* Pairing started for device, start a timeout handler */
+                    Log.d(TAG, "********** Pairing Initiated with Device :" + deviceInfoLog + " **********");
+                    // mListener.onPairingStarted();
+                    break;
+
+                case BluetoothDevice.BOND_BONDED:
+                    Log.d(TAG, "********** Device paired successfully :" + deviceInfoLog + "  **********");
+                    //  cancelDeviceDiscovery();
+                    onPairingCompleted();
+                   // notifyConnectionSuccess("PAIRED");
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        protected void onPairingCompleted(){
+            /* Device pairing completed */
+            //mListener.onPairingSuccess();
         }
 
     }

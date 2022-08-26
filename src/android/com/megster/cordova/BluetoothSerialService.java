@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -16,6 +17,10 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -76,7 +81,7 @@ public class BluetoothSerialService {
 
     public int getDataPacketLength(){return plen;}
 
-
+   // private BluetoothBroadcastReceiver actionFoundReceiver;
     /**
      * Constructor. Prepares a new BluetoothSerial session.
      * @param handler  A Handler to send messages back to the UI Activity
@@ -85,7 +90,21 @@ public class BluetoothSerialService {
         mAdapter = BluetoothAdapter.getDefaultAdapter();
         mState = STATE_NONE;
         mHandler = handler;
+
+
     }
+
+//    public void registerStateChangeReceiver(Context context) {
+//
+//
+//        //nehal
+//        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+//        // filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+//        // filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+//        // filter.addAction(BluetoothDevice.ACTION_FOUND);
+//        actionFoundReceiver = new BluetoothBroadcastReceiver();
+//        context.registerReceiver(actionFoundReceiver, filter);
+//    }
 
     /**
      * Set the current state of the chat connection
@@ -110,12 +129,12 @@ public class BluetoothSerialService {
      * session in listening (server) mode. Called by the Activity onResume() */
     public synchronized void start(BluetoothDevice device) {
         if (D) Log.d(TAG, "start");
-        if (
-            // this is specifically for the A&D devices for the SPP listener mode
-                device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
-        ) {
-            startBluetoothSPPListener(device);
-        } else {
+//        if (
+//            // this is specifically for the A&D devices for the SPP listener mode
+//                device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
+//        ) {
+//            startBluetoothSPPListener(device);
+//        } else {
             // Cancel any thread attempting to make a connection
             if (mConnectThread != null) {mConnectThread.cancel(); mConnectThread = null;}
 
@@ -123,7 +142,15 @@ public class BluetoothSerialService {
             if (mConnectedThread != null) {mConnectedThread.cancel(); mConnectedThread = null;}
 
             setState(STATE_NONE);
+
+        if (
+            // this is specifically for the A&D devices for the SPP listener mode
+            device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
+        ) {
+            startBluetoothSPPListener(device);
         }
+
+ //       }
     }
 
     private void startBluetoothSPPListener(BluetoothDevice device){
@@ -256,6 +283,8 @@ public class BluetoothSerialService {
 
         setState(STATE_CONNECTED);
     }
+
+
 
     /**
      * Stop all threads
@@ -427,14 +456,24 @@ public class BluetoothSerialService {
         public ConnectThread(BluetoothDevice device, boolean secure) {
             mmDevice = device;
             BluetoothSocket tmp = null;
+            if ( //nehal
+                device.getName().contains("UA-767") ||
+                    device.getName().contains("UC-355") ||
+                    device.getName().contains("UC-351")
+            ) {
+                secure = false;
+            }
+
             mSocketType = secure ? "Secure" : "Insecure";
 
+
+
             // Get a BluetoothSocket for a connection with the given BluetoothDevice
-            if (
-                    !device.getName().contains("UA-767") &&
-                            !device.getName().contains("UC-355") &&
-                            !device.getName().contains("UC-351")
-            ) {
+//            if (
+//                    !device.getName().contains("UA-767") &&
+//                            !device.getName().contains("UC-355") &&
+//                            !device.getName().contains("UC-351")
+//            ) {
                 // Get a BluetoothSocket for a connection with the given BluetoothDevice
                 try {
                     if (secure) {
@@ -446,27 +485,27 @@ public class BluetoothSerialService {
                     Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
                 }
                 mmSocket = tmp;
-            } else {
-                try {
-                    tmp = mmDevice.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
-                    mAdapter.cancelDiscovery();
-                    tmp.connect();
-                } catch (IOException e) {
-                    Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
-                }
-                mmSocket = tmp;
-            }
+//            } else {
+//                try {
+//                    tmp = mmDevice.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
+//                    mAdapter.cancelDiscovery();
+//                    tmp.connect();
+//                } catch (IOException e) {
+//                    Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
+//                }
+//                mmSocket = tmp;
+//            }
         }
 
         public void run() {
             Log.i(TAG, "BEGIN mConnectThread SocketType:" + mmDevice);
             setName("ConnectThread" + mSocketType);
 
-            if (
-                    !mmDevice.getName().contains("UA-767") &&
-                            !mmDevice.getName().contains("UC-355") &&
-                            !mmDevice.getName().contains("UC-351")
-            ) {
+//            if (
+//                    !mmDevice.getName().contains("UA-767") &&
+//                            !mmDevice.getName().contains("UC-355") &&
+//                            !mmDevice.getName().contains("UC-351")
+//            ) {
                 // Always cancel discovery because it will slow down a connection
                 mAdapter.cancelDiscovery();
 
@@ -496,7 +535,7 @@ public class BluetoothSerialService {
                         connectionFailed();
                         return;
                     }
-                }
+               // }
             }
 
             // Reset the ConnectThread because we're done
