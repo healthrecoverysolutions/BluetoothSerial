@@ -485,6 +485,8 @@ public class BluetoothSerialService {
                     Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
                 }
                 mmSocket = tmp;
+
+                mAdapter.cancelDiscovery(); 
 //            } else {
 //                try {
 //                    tmp = mmDevice.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
@@ -507,7 +509,7 @@ public class BluetoothSerialService {
 //                            !mmDevice.getName().contains("UC-351")
 //            ) {
                 // Always cancel discovery because it will slow down a connection
-                mAdapter.cancelDiscovery();
+          //      mAdapter.cancelDiscovery();
 
                 // Make a connection to the BluetoothSocket
                 try {
@@ -527,12 +529,21 @@ public class BluetoothSerialService {
                         Log.i(TAG,"Connected");
                     } catch (Exception e2) {
                         Log.e(TAG, "Couldn't establish a Bluetooth connection.");
-                        try {
-                            mmSocket.close();
-                        } catch (IOException e3) {
-                            Log.e(TAG, "unable to close() " + mSocketType + " socket during connection failure", e3);
-                        }
-                        connectionFailed();
+
+
+                                        try {
+                                            mmSocket.close();
+                                        } catch (IOException e3) {
+                                            Log.e(TAG, "unable to close() " + mSocketType + " socket during connection failure", e3);
+                                        }
+                        if (
+                            !mmDevice.getName().contains("UA-767") &&
+                                !mmDevice.getName().contains("UC-355") &&
+                                !mmDevice.getName().contains("UC-351")
+                        ) {
+                                        connectionFailed();
+
+                                    }
                         return;
                     }
                // }
