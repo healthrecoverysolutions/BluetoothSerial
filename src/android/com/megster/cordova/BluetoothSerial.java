@@ -33,6 +33,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -182,7 +183,7 @@ public class BluetoothSerial extends CordovaPlugin {
                                 Log.d("AB", "Device Disconnected ACL  " + device.getName());
                                 Log.d("AB", "BT service instance " + bluetoothSerialService);
                                 Log.d("AB", "## Device " + device.getName() + " ACL Disconnected --empty the queue to start fresh");
-//                                bluetoothSerialService.setStateNone();
+                                 bluetoothSerialService.setStateNone();
 //                                if (queuedClassicDevices != null) {
 //                                    queuedClassicDevices.clear();
 //                                }
@@ -273,7 +274,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
             delimiter = args.getString(0);
             dataAvailableCallback = callbackContext;
-
+            Log.d("AB", "Data available callback " + dataAvailableCallback);
             PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
             result.setKeepCallback(true);
             callbackContext.sendPluginResult(result);
@@ -536,9 +537,10 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
    //static Set<ClassicDevice> queuedClassicDevices = new HashSet<ClassicDevice>();
-   static Set<ClassicDevice> queuedClassicDevices = new TreeSet<ClassicDevice>();
+  // static Set<ClassicDevice> queuedClassicDevices = new TreeSet<ClassicDevice>();
+   static Set<ClassicDevice> queuedClassicDevices = new LinkedHashSet<ClassicDevice>();
 
-    class ClassicDevice {
+    class ClassicDevice implements Comparable<ClassicDevice> {
         BluetoothDevice bluetoothDevice;
         boolean secure;
         CallbackContext callbackContext;
@@ -575,6 +577,11 @@ public class BluetoothSerial extends CordovaPlugin {
             return true;
         }
 
+        @Override
+        public int compareTo(ClassicDevice o) {
+            return bluetoothDevice.getAddress().compareTo(o.bluetoothDevice.getAddress());
+
+        }
     }
 
     private void connect(CordovaArgs args, boolean secure, CallbackContext callbackContext) throws JSONException {
@@ -588,28 +595,44 @@ public class BluetoothSerial extends CordovaPlugin {
         String macAddress = args.getString(0);
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
         Log.d("AB", "## Processing incoming connect for device " + device.getName());
+        Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+        if(!bondedDevices.contains(device)) {
+            Log.d("AB", "This is a device which has requested to pair --- ");
+            Log.d("AB", "Clearing the queue");
+            queuedClassicDevices.clear();
+            bluetoothSerialService.stop();
+        }
 
-
-//        if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
-//            || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED)) {
-//            Log.d("AB", "## Service already connecting so do nothing");
-//            //bluetoothSerialService.restartSPPAcceptThread(device);
-//        } else {
+        if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
+            || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED)) {
+            Log.d("AB", "## Service already connecting so do nothing");
+            //bluetoothSerialService.restartSPPAcceptThread(device);
+        } else {
             if (queuedClassicDevices.isEmpty()) {
                 Log.d("AB", "## QUEUE is empty thus connecting to the obtained device ## ");
                 if (device != null) {
-                    queuedClassicDevices.add(new ClassicDevice(device, secure, callbackContext));
+                    if(! isNextQueueEntryUnderProcess) { //concurrent modification
+                        Log.d("AB", "## Added to queue ");
+                        queuedClassicDevices.add(new ClassicDevice(device, secure, callbackContext));
+                    }else {
+                        Log.d("AB", "## Concurrent modification avoidded");
+                    }
                 }
                 connectClassic(device, secure, callbackContext);
             } else {
 
                 Log.d("AB", "## QUEUE is NOT ---- empty thus will ADD will wait until last device finishes good or bad ## ");
                 if (device != null) {
-                    queuedClassicDevices.add(new ClassicDevice(device, secure, callbackContext));
+                    if(! isNextQueueEntryUnderProcess) { //concurrent modification
+                        Log.d("AB", "## Added to queue ");
+                        queuedClassicDevices.add(new ClassicDevice(device, secure, callbackContext));
+                    }else {
+                        Log.d("AB", "## Concurrent modification avoidded");
+                    }
                     Log.d("AB", "## QUEUE SIZE ## " + queuedClassicDevices.size());
                 }
             }
-     //   }
+        }
     }
 
     private synchronized void connectClassic(BluetoothDevice device, boolean secure, CallbackContext callbackContext) {
@@ -640,14 +663,16 @@ public class BluetoothSerial extends CordovaPlugin {
                 case MESSAGE_READ:
                     String bundle = msg.obj.toString();
                     Log.d(TAG, bundle);
-
+                    Log.d("AB", "Read message now sending to subscriber " + dataAvailableCallback);
                     if (dataAvailableCallback != null) {
+                        Log.d("AB", "Sending data to subscriber ");
                         sendDataToSubscriber(bundle);
                     }
 
                     break;
                 case MESSAGE_READ_RAW:
-                    if (rawDataAvailableCallback != null) {
+                    Log.d("AB", "Read RAW message now sending to subscriber " + rawDataAvailableCallback);
+                    if (rawDataAvailableCallback != null) {  Log.d("AB", "Read RAW message now definitely sending to subscriber ");
                         byte[] bytes = (byte[]) msg.obj;
                         sendRawDataToSubscriber(bytes);
                     }
@@ -697,7 +722,9 @@ public class BluetoothSerial extends CordovaPlugin {
         processNextEnqueuedClassicDevice();
     }
 
-    private void processNextEnqueuedClassicDevice() {
+    private static boolean isNextQueueEntryUnderProcess = false;
+
+    private synchronized void processNextEnqueuedClassicDevice() {
 //        if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
 //        || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED)) {
         //    Log.d("AB", "## Attempting to process next enqueued device but annother oneis already in connecting state --- ");
@@ -708,16 +735,19 @@ public class BluetoothSerial extends CordovaPlugin {
       //  } else {
             Log.d("AB", "## Process next enqueued classic device --- ");
             if (!queuedClassicDevices.isEmpty()) {
-
+                isNextQueueEntryUnderProcess = true;
                 Iterator<ClassicDevice> iterator = queuedClassicDevices.iterator();
                 if (iterator.hasNext()) {
+
                     ClassicDevice element = iterator.next();
                     Log.d("AB", "## Process next enqueued classic device --- " + element.bluetoothDevice.getName());
                     connectClassic(element.bluetoothDevice, element.secure, element.callbackContext);
 
                     iterator.remove();
+                    isNextQueueEntryUnderProcess = false;
                 } else {
                     Log.d("AB", "## Not processing any element --- ");
+                    isNextQueueEntryUnderProcess = false;
                 }
 
             }
