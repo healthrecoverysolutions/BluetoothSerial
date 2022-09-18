@@ -79,6 +79,9 @@ public class BluetoothSerialService {
 
     public int getDataPacketLength(){return plen;}
 
+    public void resetConnectedBTDevice() {
+        connectedBlueToothDevice = null;
+    }
 
     /**
      * Constructor. Prepares a new BluetoothSerial session.
@@ -130,6 +133,8 @@ public class BluetoothSerialService {
             device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
         ) {
           //   startBluetoothSPPListener(device);
+
+            resetConnectedBTDevice();
 
             if (sppAcceptThread!=null && sppAcceptThread.isAlive()) {
                 Log.d(TAG, "## SPP thread is alive!!!");
@@ -340,7 +345,7 @@ public class BluetoothSerialService {
      */
     public synchronized void connect(BluetoothDevice device, boolean secure) {
         if (D) Log.d(TAG, "connect to: " + device);
-        // bluetoothDevice = device;
+        bluetoothDevice = device;
 
         // Cancel any thread attempting to make a connection
         if (mState == STATE_CONNECTING) {
@@ -431,7 +436,8 @@ public class BluetoothSerialService {
             mInsecureAcceptThread = null;
         }
 
-
+        connectedBlueToothDevice = null;
+        Log.d("AB", "On service stop --- Made connected bluetooth device as null ");
         setState(STATE_NONE);
     }
 
@@ -1084,7 +1090,11 @@ public class BluetoothSerialService {
     }
 
     public synchronized BluetoothDevice getConnectedDevice() {
-        return connectedBlueToothDevice;
+        if (connectedBlueToothDevice!=null) {
+            return connectedBlueToothDevice;
+        } else {
+            return bluetoothDevice;
+        }
     }
 
     protected void closeBluetoothConnection()  {
