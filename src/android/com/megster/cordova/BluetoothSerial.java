@@ -21,13 +21,25 @@ import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
-import org.apache.cordova.LOG;
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaWebView;
+import android.util.Log;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.TreeSet;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import java.util.Set;
@@ -103,10 +115,91 @@ public class BluetoothSerial extends CordovaPlugin {
     // Android 29 and 30 permission
     private static final String ACCESS_FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION;
 
+    private BluetoothBroadcastReceiver aclConnectEventReceiver;
+    private static ConcurrentLinkedQueue<ClassicDevice> queuedClassicDevices = new ConcurrentLinkedQueue<ClassicDevice>();
+    private Handler queueHandler = new Handler();
+
+    public void registerStateChangeReceiver(Context context) {
+        if(aclConnectEventReceiver == null) {
+
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+            filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+            aclConnectEventReceiver = new BluetoothBroadcastReceiver();
+            context.registerReceiver(aclConnectEventReceiver, filter);
+        }
+    }
+
+    /**
+     * Broadcast receiver listening to bluetooth connection and pairing actions
+     */
+    private class BluetoothBroadcastReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            try {
+                String action = intent.getAction();
+                Bundle bundle = intent.getExtras();
+
+                /* Logging of actions received for debugging purpose */
+                if (BluetoothDevice.ACTION_FOUND.equals(action) && bundle != null) {
+                    for (String key : bundle.keySet()) {
+                        Log.d(TAG, String.format("======%s :  %s--%s", action, key,
+                            bundle.get(key) != null ? Objects.requireNonNull(bundle.get(key)).toString() : "null"));
+                    }
+                }
+
+                if (action == null) return;
+
+                switch (action) {
+//                    case BluetoothDevice.ACTION_BOND_STATE_CHANGED:
+//                        Log.d(TAG, "ACTION_BOND_STATE_CHANGED");
+//                        onPairingStateChanged(Objects.requireNonNull(bundle), intent);
+//                        break;
+
+
+                    case BluetoothDevice.ACTION_ACL_CONNECTED:
+                        if (intent != null) {
+                            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                            if (device != null) {
+                                Log.d(TAG, "Device CONNECTED ACL  " + device.getName());
+                            }
+                        }
+                        break;
+                    case BluetoothDevice.ACTION_ACL_DISCONNECTED:
+
+                        // Even if the device is transmitting the readings and is ON, then also this event gets notfication at a very early time
+                        // when we turn on a device, state is not changing from isConnected to CONNECTING..
+                        if (intent != null) {
+                            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                            if (device != null) {
+                                Log.d(TAG, "Device Disconnected ACL  " + device.getName());
+                                bluetoothSerialService.setStateNone();
+
+                                if (queuedClassicDevices!=null) {
+                                    processNextEnqueuedClassicDevice();
+                                }
+                            }
+                        }
+                    default:
+                        break;
+                }
+            } catch (Exception e) {
+                Log.d(TAG,
+                    "Exception onReceive in Device paired with the sensor" + e);
+            }
+        }
+    }
+
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView){
+        Log.d(TAG, "Initialize plugin & queue");
+    }
+
     @Override
     public boolean execute(String action, CordovaArgs args, CallbackContext callbackContext) throws JSONException {
 
-        LOG.d(TAG, "action = " + action);
+        Log.d(TAG, "action = " + action);
 
         if (bluetoothAdapter == null) {
             bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -114,6 +207,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
         if (bluetoothSerialService == null) {
             bluetoothSerialService = new BluetoothSerialService(mHandler);
+            registerStateChangeReceiver(cordova.getContext());
         }
 
         boolean validAction = true;
@@ -135,9 +229,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
         } else if (action.equals(DISCONNECT)) {
 
-            connectCallback = null;
-            bluetoothSerialService.stop();
-            callbackContext.success();
+            disconnect(callbackContext);
 
         } else if (action.equals(WRITE)) {
 
@@ -162,7 +254,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
             delimiter = args.getString(0);
             dataAvailableCallback = callbackContext;
-
+            Log.d(TAG, "Data available callback " + dataAvailableCallback);
             PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
             result.setKeepCallback(true);
             callbackContext.sendPluginResult(result);
@@ -225,7 +317,7 @@ public class BluetoothSerial extends CordovaPlugin {
             cordova.startActivityForResult(this, intent, REQUEST_ENABLE_BLUETOOTH);
 
         } else if (action.equals(DISCOVER_UNPAIRED)) {
-
+           
             if (hasBluetoothPermissions()) {
                 discoverUnpairedDevices(callbackContext);
             } else {
@@ -262,6 +354,14 @@ public class BluetoothSerial extends CordovaPlugin {
         return validAction;
     }
 
+
+    private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
+        Log.d(TAG, "## Disconnect event making connect callback null");
+        connectCallback = null;
+        bluetoothSerialService.stop();
+        callbackContext.success();
+
+    }
     private boolean hasBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) { // for android 12 check for Nearby devices permission
             return cordova.hasPermission(BLUETOOTH_SCAN) && cordova.hasPermission(BLUETOOTH_CONNECT);
@@ -318,6 +418,10 @@ public class BluetoothSerial extends CordovaPlugin {
         if (bluetoothSerialService != null) {
             bluetoothSerialService.stop();
         }
+        if(aclConnectEventReceiver!=null) {
+            cordova.getActivity().unregisterReceiver(aclConnectEventReceiver);
+            aclConnectEventReceiver = null;
+        }
     }
 
     private void listBondedDevices(CallbackContext callbackContext) throws JSONException {
@@ -330,9 +434,12 @@ public class BluetoothSerial extends CordovaPlugin {
         callbackContext.success(deviceList);
     }
 
+
+
     private void discoverUnpairedDevices(final CallbackContext callbackContext) throws JSONException {
 
         final CallbackContext ddc = deviceDiscoveredCallback;
+
 
         final BroadcastReceiver discoverReceiver = new BroadcastReceiver() {
 
@@ -340,8 +447,10 @@ public class BluetoothSerial extends CordovaPlugin {
 
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
+
                 if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                    Log.d(TAG, "Action FOUND device " + device.getName());
                     try {
                         JSONObject o = deviceToJSON(device);
                         unpairedDevices.put(o);
@@ -351,35 +460,91 @@ public class BluetoothSerial extends CordovaPlugin {
                             ddc.sendPluginResult(res);
                         }
                     } catch (JSONException e) {
-                        // This shouldn't happen, log and ignore
+                        // This shouldn't happen, Log and ignore
                         Log.e(TAG, "Problem converting device to JSON", e);
                     }
+                } else if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
+
                 } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
+                    Log.d(TAG, "Action discovery finished and found " + unpairedDevices.toString());
                     callbackContext.success(unpairedDevices);
                     cordova.getActivity().unregisterReceiver(this);
                 }
+
             }
+
         };
 
         Activity activity = cordova.getActivity();
-        activity.registerReceiver(discoverReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
-        activity.registerReceiver(discoverReceiver, new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED));
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(BluetoothDevice.ACTION_FOUND);
+
+        filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+        activity.registerReceiver(discoverReceiver, filter);
+
         bluetoothAdapter.startDiscovery();
     }
 
     private JSONObject deviceToJSON(BluetoothDevice device) throws JSONException {
+
         JSONObject json = new JSONObject();
-        json.put("name", device.getName());
-        json.put("address", device.getAddress());
-        json.put("id", device.getAddress());
-        if (device.getBluetoothClass() != null) {
-            json.put("class", device.getBluetoothClass().getDeviceClass());
+        if (device!= null) {
+            json.put("name", device.getName());
+            json.put("address", device.getAddress());
+            json.put("id", device.getAddress());
+            if (device.getBluetoothClass() != null) {
+                json.put("class", device.getBluetoothClass().getDeviceClass());
+            }
         }
         return json;
     }
 
-    private void connect(CordovaArgs args, boolean secure, CallbackContext callbackContext) throws JSONException {
 
+    class ClassicDevice implements Comparable<ClassicDevice> {
+        BluetoothDevice bluetoothDevice;
+        boolean secure;
+        CallbackContext callbackContext;
+
+        public ClassicDevice(BluetoothDevice bluetoothDevice, boolean secure, CallbackContext callbackContext) {
+            this.bluetoothDevice = bluetoothDevice;
+            this.secure = secure;
+            this.callbackContext = callbackContext;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result
+                + ((bluetoothDevice.getAddress() == null) ? 0 : bluetoothDevice.getAddress().hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            final ClassicDevice other = (ClassicDevice) obj;
+            if (bluetoothDevice == null) {
+                if (other.bluetoothDevice != null)
+                    return false;
+            } else if (!bluetoothDevice.getAddress().equals(other.bluetoothDevice.getAddress()))
+                return false;
+            return true;
+        }
+
+        @Override
+        public int compareTo(ClassicDevice o) {
+            return bluetoothDevice.getAddress().compareTo(o.bluetoothDevice.getAddress());
+
+        }
+    }
+
+    private void connect(CordovaArgs args, boolean secure, CallbackContext callbackContext) throws JSONException {
         if (Build.VERSION.SDK_INT >= 31) { // (API 31) Build.VERSION_CODE.S
             if(!hasBluetoothPermissions()) {
                 return;
@@ -388,8 +553,65 @@ public class BluetoothSerial extends CordovaPlugin {
 
         String macAddress = args.getString(0);
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+        Log.d(TAG, "## Processing incoming connect for device " + device.getName());
+        Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+        synchronized (queuedClassicDevices) {
+            if(!bondedDevices.contains(device)) {
+                Log.d(TAG, "This is a device which has requested to pair --- ");
+                Log.d(TAG, "Clearing the queue for polling while pairing & removing the handler");
+                queuedClassicDevices.clear();
+                bluetoothSerialService.stop();
+                executeQueueHandler();
 
+            }
+
+            if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
+                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED)) {
+                Log.d(TAG, "## Service already connecting so do nothing == -- only adding to the queue");
+                addToQueue(new ClassicDevice(device, secure, callbackContext));
+            } else {
+                if (queuedClassicDevices.isEmpty()) {
+                    Log.d(TAG, "## Queue is empty thus connecting to the obtained device ## ");
+                    if (device != null) {
+                        addToQueue(new ClassicDevice(device, secure, callbackContext));
+                    }
+                    connectClassic(device, secure, callbackContext);
+                } else {
+                    Log.d(TAG, "## Queue is NOT ---- empty thus will ADD will wait until last device finishes good or bad ## ");
+                    if (device != null) {
+                        addToQueue(new ClassicDevice(device, secure, callbackContext));
+                    }
+                }
+            }
+        }
+    }
+
+    private void addToQueue(ClassicDevice upcomingDevice) {
+        if (queuedClassicDevices!=null) {
+            if (!queuedClassicDevices.contains(upcomingDevice)) {
+                queuedClassicDevices.add(upcomingDevice);
+                Log.d(TAG, "## Added to queue ");
+                Log.d(TAG, "## Queue size ## " + queuedClassicDevices.size());
+            } else {
+                Log.d(TAG, "## Queue already contains the incoming device thus not added " + queuedClassicDevices.size());
+            }
+
+        }
+    }
+
+    private void executeQueueHandler() {
+        queueHandler.removeMessages(0);
+        queueHandler.postDelayed(() -> {
+            Log.d(TAG, "## Handler called the connect method $$$$$$ ");
+            processNextEnqueuedClassicDevice();
+        }, 15000);
+    }
+
+    private synchronized void connectClassic(BluetoothDevice device, boolean secure, CallbackContext callbackContext) {
+        executeQueueHandler();
+        Log.d(TAG, "## Connect to classic " + device.getName());
         if (device != null) {
+
             connectCallback = callbackContext;
             bluetoothSerialService.start(device);
             bluetoothSerialService.connect(device, secure);
@@ -400,7 +622,7 @@ public class BluetoothSerial extends CordovaPlugin {
             callbackContext.sendPluginResult(result);
 
         } else {
-            callbackContext.error("Could not connect to " + macAddress);
+            callbackContext.error("Could not connect to " + device.getName());
         }
     }
 
@@ -414,14 +636,16 @@ public class BluetoothSerial extends CordovaPlugin {
                 case MESSAGE_READ:
                     String bundle = msg.obj.toString();
                     Log.d(TAG, bundle);
-
+                    Log.d(TAG, "Read message now sending to subscriber " + dataAvailableCallback);
                     if (dataAvailableCallback != null) {
+                        Log.d(TAG, "Sending data to subscriber ");
                         sendDataToSubscriber(bundle);
                     }
 
                     break;
                 case MESSAGE_READ_RAW:
-                    if (rawDataAvailableCallback != null) {
+                    Log.d(TAG, "Read RAW message now sending to subscriber " + rawDataAvailableCallback);
+                    if (rawDataAvailableCallback != null) {  Log.d(TAG, "Read RAW message now definitely sending to subscriber ");
                         byte[] bytes = (byte[]) msg.obj;
                         sendRawDataToSubscriber(bytes);
                     }
@@ -462,18 +686,62 @@ public class BluetoothSerial extends CordovaPlugin {
     };
 
     private void notifyConnectionLost(String error) {
+        Log.d(TAG, "## Notify Connection Lost ");
         if (connectCallback != null) {
             connectCallback.error(error);
             connectCallback = null;
+
         }
+        processNextEnqueuedClassicDevice();
+    }
+
+    private synchronized void processNextEnqueuedClassicDevice() {
+        Log.d(TAG, "## Process next enqueued classic device --- ");
+        synchronized (queuedClassicDevices) {
+            if (!queuedClassicDevices.isEmpty()) {
+
+                ClassicDevice polledClassicDevice = queuedClassicDevices.poll(); // remove and get first element FIFO
+
+                if(polledClassicDevice!=null) {
+                    Log.d(TAG, "## Polled classic device from queue " + polledClassicDevice.bluetoothDevice.getName());
+                    connectClassic(polledClassicDevice.bluetoothDevice, polledClassicDevice.secure, polledClassicDevice.callbackContext);
+                } else {
+                    Log.d(TAG, "## Polled classic device null from queue ");
+                }
+
+            }
+        }
+
     }
 
     private void notifyConnectionSuccess() {
         if (connectCallback != null) {
-            PluginResult result = new PluginResult(PluginResult.Status.OK);
-            result.setKeepCallback(true);
-            connectCallback.sendPluginResult(result);
+
+            BluetoothDevice connectedDevice;
+            JSONObject o = null;
+            PluginResult res;
+            // sending device object to which connection has been made
+            if (bluetoothSerialService != null) {
+                connectedDevice = bluetoothSerialService.getConnectedDevice();
+                bluetoothSerialService.resetConnectedBTDevice();
+                try {
+                    o = deviceToJSON(connectedDevice);
+                    res = new PluginResult(PluginResult.Status.OK, o);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                    res = new PluginResult(PluginResult.Status.OK);
+                }
+
+            } else {
+                res = new PluginResult(PluginResult.Status.OK);
+            }
+
+            res.setKeepCallback(true);
+            connectCallback.sendPluginResult(res);
+        } else {
+            Log.d(TAG, "## Tried to notify success but no callback " + connectCallback);
         }
+        bluetoothSerialService.resetConnectedBTDevice();
     }
 
     private void sendRawDataToSubscriber(byte[] data) {
@@ -539,9 +807,9 @@ public class BluetoothSerial extends CordovaPlugin {
             } else {
                 // permissions not granted, disable functionality or show message
                 if (Build.VERSION.SDK_INT >= 31) {
-                    LOG.d(TAG, "User did not grant Nearby devices permission");
+                    Log.d(TAG, "User did not grant Nearby devices permission");
                 } else {
-                    LOG.d(TAG, "User did not grant location permission");
+                    Log.d(TAG, "User did not grant location permission");
                 }
             }
         } else {
