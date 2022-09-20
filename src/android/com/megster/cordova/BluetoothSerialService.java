@@ -872,19 +872,23 @@ public class BluetoothSerialService {
         setState(STATE_CONNECTED); //nehal new
         readPatientInfoPacket();
         int devType = readPatientPacket();
-        if(devType == 766 || deviceType.equals("bloodpressure")) { //device keeps on getting changed, recheck device frm data obtained
-            onBPDataPacket();
-        } else {
-            onScaleDataPacket();
-        }
+        Log.d(TAG, "## device type " + deviceType);
+
         if(socket!=null) {
             BluetoothDevice connectedBTDevice = socket.getRemoteDevice(); //gives the currently connected device
             if(connectedBTDevice!=null) {
-                Log.d("AB", "## connected BT device " + connectedBTDevice.getName());
+                Log.d(TAG, "## connected BT device " + connectedBTDevice.getName());
                 //Log.d("AB", "## staleinstace BT device " + bluetoothDevice.getName());
                 connectedBlueToothDevice = connectedBTDevice;
             }
         }
+        Log.d(TAG, " Connected device type " + connectedBlueToothDevice.getName());
+        if(devType == 766 || connectedBlueToothDevice.getName().contains("UA-767") /*|| deviceType.equals("bloodpressure")*/) { //device keeps on getting changed, recheck device frm data obtained
+            onBPDataPacket();
+        } else {
+            onScaleDataPacket();
+        }
+
 //        if (deviceType == "bloodpressure") { //string comparison
 //            onBPDataPacket();
 //        } else {

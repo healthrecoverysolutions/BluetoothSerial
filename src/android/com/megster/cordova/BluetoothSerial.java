@@ -493,14 +493,18 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private JSONObject deviceToJSON(BluetoothDevice device) throws JSONException {
+
         JSONObject json = new JSONObject();
-        json.put("name", device.getName());
-        Log.d(TAG, "************ CLASSIC DEVICE FOUND name " + device.getName());
-        json.put("address", device.getAddress());
-        Log.d(TAG, "************ CLASSIC DEVICE FOUND  address" + device.getAddress());
-        json.put("id", device.getAddress());
-        if (device.getBluetoothClass() != null) {
-            json.put("class", device.getBluetoothClass().getDeviceClass());
+        if (device!= null) {
+
+            json.put("name", device.getName());
+            Log.d(TAG, "************ CLASSIC DEVICE to be sent name " + device.getName());
+            json.put("address", device.getAddress());
+            Log.d(TAG, "************ CLASSIC DEVICE to be sent  address" + device.getAddress());
+            json.put("id", device.getAddress());
+            if (device.getBluetoothClass() != null) {
+                json.put("class", device.getBluetoothClass().getDeviceClass());
+            }
         }
         return json;
     }
@@ -739,23 +743,23 @@ public class BluetoothSerial extends CordovaPlugin {
             if (bluetoothSerialService != null) {
                 connectedDevice = bluetoothSerialService.getConnectedDevice();
                 bluetoothSerialService.resetConnectedBTDevice();
-            try {
-                o = deviceToJSON(connectedDevice);
-                res = new PluginResult(PluginResult.Status.OK, o);
-            } catch (JSONException e) {
-                e.printStackTrace();
-                res = new PluginResult(PluginResult.Status.OK);
-            }
+                try {
+                    o = deviceToJSON(connectedDevice);
+                    res = new PluginResult(PluginResult.Status.OK, o);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                    res = new PluginResult(PluginResult.Status.OK);
+                }
 
             } else {
-            res = new PluginResult(PluginResult.Status.OK);
+               res = new PluginResult(PluginResult.Status.OK);
             }
 
              res.setKeepCallback(true);
             Log.d(TAG, "1. Notify connection success ---- " + connectCallback);
              connectCallback.sendPluginResult(res);
             Log.d(TAG, "2. Notify connection success ---- " + connectCallback);
-             // processNextEnqueuedClassicDevice();
+            
         } else {
             Log.d(TAG, "## Tried to notify success but no callback " + connectCallback);
         }
