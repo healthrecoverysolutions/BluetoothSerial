@@ -132,15 +132,13 @@ public class BluetoothSerialService {
             // this is specifically for the A&D devices for the SPP listener mode
             device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
         ) {
-          //   startBluetoothSPPListener(device);
-
             resetConnectedBTDevice();
 
             if (sppAcceptThread!=null && sppAcceptThread.isAlive()) {
                 Log.d(TAG, "## SPP thread is alive!!!");
                 sppAcceptThread.resetDevice(device);
             } else {
-                Log.d(TAG, "## NEW SPP thread !!!");
+                Log.d(TAG, "## New SPP thread !!!");
                 sppAcceptThread = new SPPAcceptThread(device);
                 sppAcceptThread.start();
             }
@@ -176,10 +174,6 @@ public class BluetoothSerialService {
             mmServerSocket = null;
             this.device = device;
             Log.d(TAG, "New SPP Accept thread for device " + device.getName());
-//            try {
-//                mmServerSocket = adapter.listenUsingInsecureRfcommWithServiceRecord("PWAccessP", UUID_SPP);
-//            } catch (IOException e) { }
-            // mmServerSocket = tmp;
         }
 
         public void run() {
@@ -190,18 +184,18 @@ public class BluetoothSerialService {
                 mmServerSocket = adapter.listenUsingInsecureRfcommWithServiceRecord("PWAccessP", UUID_SPP);
 
 
-            while (true/* mState != STATE_CONNECTED*/) {
-                try {
-                    Log.d(TAG, "----- > SPP accept thread ---> ");
+                while (true/* mState != STATE_CONNECTED*/) {
+                    try {
+                        Log.d(TAG, "----- > SPP accept thread ---> ");
 
-                    socket = mmServerSocket.accept();
-                } catch (IOException e) {
-                    Log.d(TAG, "IO EXCEPTION -----------SPP ACCEPT--------- " + e.getMessage());
-                }
+                        socket = mmServerSocket.accept();
+                    } catch (IOException e) {
+                        Log.d(TAG, "IO EXCEPTION -----------SPP ACCEPT--------- " + e.getMessage());
+                    }
 
-                // If a connection was accepted
-                if (socket != null) {
-                    //synchronized (BluetoothSerialService.this) {
+                    // If a connection was accepted
+                    if (socket != null) {
+                        //synchronized (BluetoothSerialService.this) {
                         // Do work to manage the connection (in a separate thread)
                         try {
                             Log.d(TAG, " -- > SPP thread --> connection accepted -- > ");
@@ -224,9 +218,6 @@ public class BluetoothSerialService {
                         } catch (Exception e) {
                             Log.d(TAG, "Bluetooth Socket Error", e);
                         }
-//                        finally {
-//                            closeBluetoothConnection();
-//                        }
                         try {
                             if(mmServerSocket!=null) {
                                 mmServerSocket.close();
@@ -236,8 +227,8 @@ public class BluetoothSerialService {
                         }
                         break;
                     }
-               // }
-            }
+
+                }
 
 
             }
@@ -255,88 +246,6 @@ public class BluetoothSerialService {
             } catch (IOException e) { }
         }
     }
-
-    private void startBluetoothSPPListener(BluetoothDevice device){
-        //start the bluetooth listener as its own thread
-        //this listener checks for all incoming bluetooth connections and invokes the proper class object associated with that device
-
-
-        Thread adt=new Thread(new Runnable(){
-
-
-
-            @Override
-            public void run() {
-                try{
-                    bluetoothDevice = device;
-                    Log.d(TAG, "Starting listening mode");
-                    BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-                    while(true) {
-                        BluetoothServerSocket bluetoothSocket=adapter.listenUsingInsecureRfcommWithServiceRecord("PWAccessP", UUID_SPP);
-                        // final BluetoothSocket bs=bluetoothSocket.accept();
-                        BluetoothSocket bs;
-                        try {
-                            bs = bluetoothSocket.accept();
-                        }catch (IOException ex){
-                           // Log.d(TAG,"SPP Listener Run: bluetoothSocket" + ex.getMessage());
-                         //   Thread.sleep(1000);
-                            break;
-                          //  continue;
-                        }
-                        if (bs == null) {
-                            try {
-                                closeConnection();
-                            } catch(Exception e) {
-                                Log.d(TAG,"CLOSE", e);
-                            }
-                        }
-                        if(bluetoothSocket!=null)
-                            bluetoothSocket.close();
-
-                        Log.d(TAG, "Incoming bluetooth connection");
-                        Thread bst = new Thread(new Runnable(){
-
-                            @Override
-                            public void run() {
-                                try{
-                                    BluetoothDevice btDevice =   connectedBlueToothDevice;//  bluetoothDevice; //device;
-                                    String deviceType = "";
-                                    try{
-                                        String deviceAddr = btDevice.getAddress();
-                                        //found connected device profile, get results
-                                        Log.d(TAG, "Bluetooth device found, processing data..." + btDevice.getName());
-                                        if (btDevice.getName().contains("UA-767")) {
-                                            deviceType = "bloodpressure";
-                                        } else if (btDevice.getName().contains("UC-355") || btDevice.getName().contains("UC-351") ) {
-                                            deviceType = "scale";
-                                        }
-                                        onConnection(bs);
-                                        readData(bs, deviceType);
-                                    }
-                                    catch(Exception e){
-                                        Log.d(TAG,"Error finding bluetooth device" + e);
-                                    }
-                                }
-                                catch(Exception e){
-                                    Log.d(TAG,"Bluetooth Socket Error", e);
-                                }
-                            }
-
-                        });
-                        bst.start();
-                    }
-                }
-                catch(Exception e){
-                    Log.d(TAG,"Bluetooth Listener Error",e);
-                }
-            }
-
-        });
-        adt.start();
-    }
-
-
-
 
     /**
      * Start the ConnectThread to initiate a connection to a remote device.
@@ -404,7 +313,6 @@ public class BluetoothSerialService {
             msg.setData(bundle);
             mHandler.sendMessage(msg);
 
-            //setState(STATE_CONNECTED);
         }
         setState(STATE_CONNECTED);
 
@@ -613,9 +521,7 @@ public class BluetoothSerialService {
                 mmSocket = tmp;
             } else {
                 try {
-                    tmp = /*mmDevice*/device.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
-//                    mAdapter.cancelDiscovery();
-//                    tmp.connect();
+                    tmp = device.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
                 } catch (IOException e) {
                     Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
                 }
@@ -650,7 +556,7 @@ public class BluetoothSerialService {
                     try {
                         Log.i(TAG, "Trying fallback...");
                         mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
-                   //    mmSocket =(BluetoothSocket)  mmDevice.getClass().getMethod("createInsecureRfcommSocketToServiceRecord", new Class[] { UUID.class }).invoke(mmDevice, UUID_SPP);
+
                         mmSocket.connect();
                         Log.i(TAG, "Connected");
                         connectedBlueToothDevice = mmSocket.getRemoteDevice();
@@ -693,23 +599,18 @@ public class BluetoothSerialService {
                                 mmSocket.close();
                             }
 
-                            } catch (IOException e3) {
-                                Log.e(TAG, "unable to close() " + mSocketType + " socket during connection failure", e3);
-                            }
-                            // closeBluetoothConnection();
-                            // Send the name of the connected device back to the UI Activity
-                            // Send a failure message back to the Activity
-                            Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_TOAST);
-                            Bundle bundle = new Bundle();
-                            bundle.putString(BluetoothSerial.TOAST, "Unable to connect to device");
-                            msg.setData(bundle);
-                            mHandler.sendMessage(msg);
+                        } catch (IOException e3) {
+                            Log.e(TAG, "unable to close() " + mSocketType + " socket during connection failure", e3);
+                        }
 
-//                        } catch (IOException e3) {
-//                            Log.e(TAG, "unable to close() " + mSocketType + " socket during connection failure", e3);
-//                        }
+                        // Send the name of the connected device back to the UI Activity
+                        // Send a failure message back to the Activity
+                        Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_TOAST);
+                        Bundle bundle = new Bundle();
+                        bundle.putString(BluetoothSerial.TOAST, "Unable to connect to device");
+                        msg.setData(bundle);
+                        mHandler.sendMessage(msg);
 
-                        //return;
                     }
                 }
 
@@ -734,7 +635,7 @@ public class BluetoothSerialService {
 
     private void connectToDevice(BluetoothSocket socket) throws IOException {
         mmSocket = socket;
-        connectedBlueToothDevice = socket.getRemoteDevice();// bluetoothDevice = socket.getRemoteDevice();
+        connectedBlueToothDevice = socket.getRemoteDevice();
         Log.d(TAG, "bluetoothDevice CONNECTED OR NOT: " + socket.isConnected());
         in = socket.getInputStream();
         out = socket.getOutputStream();
@@ -781,7 +682,7 @@ public class BluetoothSerialService {
         return (val << shift);
     }
 
-    private /*void*/ int readPatientPacket() throws IOException{
+    private int readPatientPacket() throws IOException{
         // Check the packet length...
         plen = in.read() + shift(in.read(),8) + shift(in.read(),16) + shift(in.read(),24);
         Log.d(TAG,"packet len: " + plen);
@@ -863,13 +764,12 @@ public class BluetoothSerialService {
         if (socket!=null) {
             in = socket.getInputStream();
             out = socket.getOutputStream();
-            restartBluetoothTimeout(socket);
         }
     }
 
     private void readData(BluetoothSocket socket, String deviceType) throws IOException{
         connectToDevice(socket);
-        setState(STATE_CONNECTED); //nehal new
+        setState(STATE_CONNECTED);
         readPatientInfoPacket();
         int devType = readPatientPacket();
         Log.d(TAG, "## device type " + deviceType);
@@ -878,51 +778,18 @@ public class BluetoothSerialService {
             BluetoothDevice connectedBTDevice = socket.getRemoteDevice(); //gives the currently connected device
             if(connectedBTDevice!=null) {
                 Log.d(TAG, "## connected BT device " + connectedBTDevice.getName());
-                //Log.d("AB", "## staleinstace BT device " + bluetoothDevice.getName());
                 connectedBlueToothDevice = connectedBTDevice;
             }
         }
         Log.d(TAG, " Connected device type " + connectedBlueToothDevice.getName());
-        if(devType == 766 || connectedBlueToothDevice.getName().contains("UA-767") /*|| deviceType.equals("bloodpressure")*/) { //device keeps on getting changed, recheck device frm data obtained
+        if(devType == 766 || connectedBlueToothDevice.getName().contains("UA-767") ) { //device keeps on getting changed, recheck device frm data obtained
             onBPDataPacket();
         } else {
             onScaleDataPacket();
         }
 
-//        if (deviceType == "bloodpressure") { //string comparison
-//            onBPDataPacket();
-//        } else {
-//            onScaleDataPacket();
-//        }
-
         sendAcknowledgement();
         closeConnection();
-    }
-
-    //bluetooth socket timeout functions
-    protected void startBluetoothTimeout(BluetoothSocket socket){
-//        bluetooth_timer=new Timer();
-//        bluetooth_timer.schedule(new TimerTask() {
-//            @Override
-//            public void run() {
-//                //shut down the bluetooth socket
-//                Log.d(TAG,"bluetooth socket timeout...");
-//                try {
-//                    socket.close();
-//                } catch(Exception e) {}
-//            }
-//        }, bluetooth_timeout);
-    }
-
-    protected void cancelBluetoothTimeout(){
-//        try{
-//            bluetooth_timer.cancel();
-//        }
-//        catch(Exception e){}
-    }
-    protected void restartBluetoothTimeout(BluetoothSocket socket){
-        cancelBluetoothTimeout();
-        startBluetoothTimeout(socket);
     }
 
     /**
@@ -1096,7 +963,8 @@ public class BluetoothSerialService {
     public synchronized BluetoothDevice getConnectedDevice() {
         if (connectedBlueToothDevice!=null) {
             return connectedBlueToothDevice;
-        } else {
+        }
+        else {
             return bluetoothDevice;
         }
     }
@@ -1106,7 +974,6 @@ public class BluetoothSerialService {
         try{if(in!=null) {in.close();}}catch(Exception e){e.printStackTrace();}
         try{if(out!=null) {out.close();}}catch(Exception e){e.printStackTrace();}
         try{if(mmSocket!=null) {mmSocket.close();}}catch(Exception e){e.printStackTrace();}
-        cancelBluetoothTimeout();
         setState(STATE_NONE);
     }
 }
