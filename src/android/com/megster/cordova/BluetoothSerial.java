@@ -116,8 +116,8 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String ACCESS_FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION;
 
     private BluetoothBroadcastReceiver aclConnectEventReceiver;
-    private static ConcurrentLinkedQueue<ClassicDevice> queuedClassicDevices = new ConcurrentLinkedQueue<ClassicDevice>();
-    private Handler queueHandler = new Handler();
+   // private static ConcurrentLinkedQueue<ClassicDevice> queuedClassicDevices = new ConcurrentLinkedQueue<ClassicDevice>();
+   // private Handler queueHandler = new Handler();
 
     public void registerStateChangeReceiver(Context context) {
         if(aclConnectEventReceiver == null) {
@@ -176,9 +176,9 @@ public class BluetoothSerial extends CordovaPlugin {
                                 Log.d(TAG, "Device Disconnected ACL  " + device.getName());
                                 bluetoothSerialService.setStateNone();
 
-                                if (queuedClassicDevices!=null) {
-                                    processNextEnqueuedClassicDevice();
-                                }
+//                                if (queuedClassicDevices!=null) {
+//                                    processNextEnqueuedClassicDevice();
+//                                }
                             }
                         }
                     default:
@@ -229,8 +229,8 @@ public class BluetoothSerial extends CordovaPlugin {
             connect(args, secure, callbackContext);
 
         } else if (action.equals(DISCONNECT)) {
-
-          //  disconnect(callbackContext);
+            Log.d(TAG, "Calling disconnect ---<><>");
+            disconnect(callbackContext);
 
         } else if (action.equals(WRITE)) {
 
@@ -355,6 +355,17 @@ public class BluetoothSerial extends CordovaPlugin {
         return validAction;
     }
 
+    // Convert to ENUM
+    private boolean isSPPListenerNeeded (BluetoothDevice device) {
+        if (
+            // this is specifically for the A&D devices for the SPP listener mode
+            device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
+        ) {
+            return true;
+        }
+
+        return false;
+    }
 
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
         Log.d(TAG, "## Disconnect event making connect callback null");
@@ -557,43 +568,43 @@ public class BluetoothSerial extends CordovaPlugin {
         Log.d(TAG, "## Processing incoming connect for device " + device.getName());
         Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
 
-       // connectClassic(device, secure, callbackContext);
+       connectClassic(device, secure, callbackContext);
 
-        synchronized (queuedClassicDevices) {
-            if(!bondedDevices.contains(device)) {
-                Log.d(TAG, "This is a device which has requested to pair --- ");
-                Log.d(TAG, "Clearing the queue for polling while pairing & removing the handler");
-                queuedClassicDevices.clear();
-                bluetoothSerialService.stop();
-                executeQueueHandler();
-
-            }
-
-            if (bluetoothSerialService!=null) {
-                Log.d(TAG, "## Service STATE " + bluetoothSerialService.getState());
-            }
-
-            if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
-                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED
-                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_LISTEN)) {
-                Log.d(TAG, "## Service already connecting so do nothing == -- only adding to the queue");
-
-                addToQueue(new ClassicDevice(device, secure, callbackContext));
-            } else {
-                if (queuedClassicDevices.isEmpty()) {
-                    Log.d(TAG, "## Queue is empty thus connecting to the obtained device ## ");
-                    if (device != null) {
-                        addToQueue(new ClassicDevice(device, secure, callbackContext));
-                    }
-                    connectClassic(device, secure, callbackContext);
-                } else {
-                    Log.d(TAG, "## Queue is NOT ---- empty thus will ADD will wait until last device finishes good or bad ## ");
-                    if (device != null) {
-                        addToQueue(new ClassicDevice(device, secure, callbackContext));
-                    }
-                }
-            }
-        }
+//        synchronized (queuedClassicDevices) {
+//            if(!bondedDevices.contains(device)) {
+//                Log.d(TAG, "This is a device which has requested to pair --- ");
+//                Log.d(TAG, "Clearing the queue for polling while pairing & removing the handler");
+//                queuedClassicDevices.clear();
+//                bluetoothSerialService.stop();
+//                executeQueueHandler();
+//
+//            }
+//
+//            if (bluetoothSerialService!=null) {
+//                Log.d(TAG, "## Service STATE " + bluetoothSerialService.getState());
+//            }
+//
+//            if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
+//                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED
+//                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_LISTEN)) {
+//                Log.d(TAG, "## Service already connecting so do nothing == -- only adding to the queue");
+//
+//                addToQueue(new ClassicDevice(device, secure, callbackContext));
+//            } else {
+//                if (queuedClassicDevices.isEmpty()) {
+//                    Log.d(TAG, "## Queue is empty thus connecting to the obtained device ## ");
+//                    if (device != null) {
+//                        addToQueue(new ClassicDevice(device, secure, callbackContext));
+//                    }
+//                    connectClassic(device, secure, callbackContext);
+//                } else {
+//                    Log.d(TAG, "## Queue is NOT ---- empty thus will ADD will wait until last device finishes good or bad ## ");
+//                    if (device != null) {
+//                        addToQueue(new ClassicDevice(device, secure, callbackContext));
+//                    }
+//                }
+//            }
+//        }
     }
 
     private void addToQueue(ClassicDevice upcomingDevice) {
@@ -609,13 +620,13 @@ public class BluetoothSerial extends CordovaPlugin {
 //        }
     }
 
-    private void executeQueueHandler() {
-        queueHandler.removeMessages(0);
-        queueHandler.postDelayed(() -> {
-            Log.d(TAG, "## Handler called the connect method $$$$$$ ");
-            processNextEnqueuedClassicDevice();
-        }, 15000);
-    }
+//    private void executeQueueHandler() {
+//        queueHandler.removeMessages(0);
+//        queueHandler.postDelayed(() -> {
+//            Log.d(TAG, "## Handler called the connect method $$$$$$ ");
+//            processNextEnqueuedClassicDevice();
+//        }, 15000);
+//    }
 
     private synchronized void connectClassic(BluetoothDevice device, boolean secure, CallbackContext callbackContext) {
       //  executeQueueHandler();
@@ -623,13 +634,19 @@ public class BluetoothSerial extends CordovaPlugin {
         if (device != null) {
 
             connectCallback = callbackContext;
-            bluetoothSerialService.start(device); //nehal trial
-            Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
-            if(!bondedDevices.contains(device)) {
-                Log.d(TAG, "BONDED DEVICE NOT FOUND ");
+            //Based on device, we need to either call Start or Connect
+            if(isSPPListenerNeeded(device)) { //For devices which need SPP Listener
+                bluetoothSerialService.start(device);
+                Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+                if(!bondedDevices.contains(device)) { // Connect only for pairing
+                    Log.d(TAG, "BONDED DEVICE NOT FOUND --connect for pairing ");
+                    bluetoothSerialService.connect(device, secure);
+                }
+            } else {  // for rest  all devices, connect for pairing and reading
                 bluetoothSerialService.connect(device, secure);
             }
-           // bluetoothSerialService.connect(device, secure); //ADB -> check if device is not paired then call connect
+
+
             buffer.setLength(0);
 
             PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
@@ -708,27 +725,27 @@ public class BluetoothSerial extends CordovaPlugin {
             connectCallback = null;
 
         }
-       processNextEnqueuedClassicDevice();
+      // processNextEnqueuedClassicDevice();
     }
 
-    private synchronized void processNextEnqueuedClassicDevice() {
-        Log.d(TAG, "## Process next enqueued classic device --- ");
-        synchronized (queuedClassicDevices) {
-            if (!queuedClassicDevices.isEmpty()) {
-
-                ClassicDevice polledClassicDevice = queuedClassicDevices.poll(); // remove and get first element FIFO
-
-                if(polledClassicDevice!=null) {
-                    Log.d(TAG, "## Polled classic device from queue " + polledClassicDevice.bluetoothDevice.getName());
-                    connectClassic(polledClassicDevice.bluetoothDevice, polledClassicDevice.secure, polledClassicDevice.callbackContext);
-                } else {
-                    Log.d(TAG, "## Polled classic device null from queue ");
-                }
-
-            }
-        }
-
-    }
+//    private synchronized void processNextEnqueuedClassicDevice() {
+//        Log.d(TAG, "## Process next enqueued classic device --- ");
+//        synchronized (queuedClassicDevices) {
+//            if (!queuedClassicDevices.isEmpty()) {
+//
+//                ClassicDevice polledClassicDevice = queuedClassicDevices.poll(); // remove and get first element FIFO
+//
+//                if(polledClassicDevice!=null) {
+//                    Log.d(TAG, "## Polled classic device from queue " + polledClassicDevice.bluetoothDevice.getName());
+//                    connectClassic(polledClassicDevice.bluetoothDevice, polledClassicDevice.secure, polledClassicDevice.callbackContext);
+//                } else {
+//                    Log.d(TAG, "## Polled classic device null from queue ");
+//                }
+//
+//            }
+//        }
+//
+//    }
 
     private void notifyConnectionSuccess() {
         if (connectCallback != null) {

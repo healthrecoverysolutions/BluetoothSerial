@@ -122,6 +122,9 @@ public class BluetoothSerialService {
     }
 
 
+
+
+
     /**
      * Start the chat service. Specifically start AcceptThread to begin a
      * session in listening (server) mode. Called by the Activity onResume() */
@@ -423,6 +426,7 @@ public class BluetoothSerialService {
             mSocketType = secure ? "Secure":"Insecure";
             Log.d(TAG, "Accept thread" + mSocketType);
 //            // Create a new listening server socket
+            /// this should work based on device type TBD
             try {
 //                if (secure) {
 //                    tmp = mAdapter.listenUsingRfcommWithServiceRecord(NAME_SECURE, MY_UUID_SECURE);
