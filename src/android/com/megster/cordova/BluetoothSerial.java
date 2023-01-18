@@ -19,28 +19,15 @@ import android.util.Log;
 import org.apache.cordova.CordovaArgs;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
-import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaWebView;
-import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Objects;
-import java.util.TreeSet;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import java.util.Set;
 
@@ -355,17 +342,54 @@ public class BluetoothSerial extends CordovaPlugin {
         return validAction;
     }
 
-    // Convert to ENUM
-    private boolean isSPPListenerNeeded (BluetoothDevice device) {
-        if (
-            // this is specifically for the A&D devices for the SPP listener mode
-            device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
-        ) {
-            return true;
+    /**
+     * This enum lists all the classic devices which use Serial Port Profile for connection. It's is one of the more fundamental Bluetooth profiles.
+     * Using SPP, each connected device can send and receive data just as if there were RX and TX lines connected between them.
+     * For us, AnD classic devices use this. For future, add any other device which uses SPP here.
+     */
+    public enum SPPProfileDevice {
+        AND_CLASSIC_351("UC-351"),
+        AND_CLASSIC_355("UC-355"),
+        AND_CLASSIC_767("UA-767");
+
+        private String text;
+
+        SPPProfileDevice(String text) {
+            this.text = text;
         }
 
-        return false;
+        public String getText() {
+            return this.text;
+        }
+
+        public static boolean isSupported(BluetoothDevice device) {
+            if(device!=null) {
+                String text = device.getName();
+                Log.d(TAG, "IS SPP PROFILE DEVICE text ---> " + text);
+                for (SPPProfileDevice b : SPPProfileDevice.values()) {
+                    Log.d(TAG, "IS SPP PROFILE DEVICE b.text ---> " + b.text);
+                    if (text != null && text.indexOf(b.text) > 0) {
+                        Log.d(TAG, "IS SPP PROFILE DEVICE ---> " + b.text);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
     }
+
+
+    // Convert to ENUM
+//    private boolean isSPPListenerNeeded (BluetoothDevice device) {
+//        if (
+//            // this is specifically for the A&D devices for the SPP listener mode
+//            device != null && (device.getName().contains("UA-767") || device.getName().contains("UC-355") || device.getName().contains("UC-351"))
+//        ) {
+//            return true;
+//        }
+//
+//        return false;
+//    }
 
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
         Log.d(TAG, "## Disconnect event making connect callback null");
@@ -635,7 +659,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
             connectCallback = callbackContext;
             //Based on device, we need to either call Start or Connect
-            if(isSPPListenerNeeded(device)) { //For devices which need SPP Listener
+            if(/*isSPPListenerNeeded(device)*/ SPPProfileDevice.isSupported(device)) { //For devices which need SPP Listener
                 bluetoothSerialService.start(device);
                 Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
                 if(!bondedDevices.contains(device)) { // Connect only for pairing
