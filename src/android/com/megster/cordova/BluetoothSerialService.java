@@ -293,6 +293,7 @@ public class BluetoothSerialService {
      * @param device  The BluetoothDevice that has been connected
      */
     public synchronized void connected(BluetoothSocket socket, BluetoothDevice device, final String socketType) {
+        setState(STATE_CONNECTED);
         if (D) Log.d(TAG, "connected, Socket Type:" + socketType);
 
         // Cancel the thread that completed the connection
@@ -329,7 +330,7 @@ public class BluetoothSerialService {
             mHandler.sendMessage(msg);
 
   //     }
-      setState(STATE_CONNECTED);
+  //    setState(STATE_CONNECTED); //TODO COMMENTED code to be reverted
 
     }
 
@@ -471,7 +472,7 @@ public class BluetoothSerialService {
                                     mSocketType);
                                 break;
                             case STATE_NONE:
-                            case STATE_CONNECTED:
+                            case STATE_CONNECTED: Log.d(TAG, "Calling accept thread CLOSE SOCKET ----------");
                                 // Either not ready or already connected. Terminate new socket.
                                 try {
                                     socket.close();
@@ -663,121 +664,121 @@ public class BluetoothSerialService {
         out = socket.getOutputStream();
         Log.d(TAG, "out: " + out);
     }
-    private void readPatientInfoPacket() throws IOException{
-        // Check the packet type...
-        int pktType1 = in.read();
-        int pktType2 = in.read();
-        int pktType = pktType1 + shift(pktType2,8);
-        Log.d(TAG,"packet type: " + pktType);
-
-
-        //if packet type is not the data packet, then read in and discard header packet
-        if (pktType != 2) {
-            Log.d(TAG,"skipping patient info packet...");
-            //this is a patient info packet, skip the next 28 bytes
-            boolean packetend = false;
-            int lookfor = 0;
-            while (!packetend) {
-                int b = in.read();
-                if (b == PATIENTINFO_PACKET_HEADER[lookfor]) {
-                    lookfor++;
-                }
-                else if (lookfor > 0) {
-                    lookfor = 0;
-                }
-
-                if (lookfor == PATIENTINFO_PACKET_HEADER.length) {
-                    packetend = true;
-                }
-            }
-            Log.d(TAG,"end of patient info packet found...");
-
-            //now start the packet read over again
-            pktType1 = in.read();
-            pktType2 = in.read();
-            pktType = pktType1 + shift(pktType2,8);
-
-        }
-    }
+//    private void readPatientInfoPacket() throws IOException{
+//        // Check the packet type...
+//        int pktType1 = in.read();
+//        int pktType2 = in.read();
+//        int pktType = pktType1 + shift(pktType2,8);
+//        Log.d(TAG,"packet type: " + pktType);
+//
+//
+//        //if packet type is not the data packet, then read in and discard header packet
+//        if (pktType != 2) {
+//            Log.d(TAG,"skipping patient info packet...");
+//            //this is a patient info packet, skip the next 28 bytes
+//            boolean packetend = false;
+//            int lookfor = 0;
+//            while (!packetend) {
+//                int b = in.read();
+//                if (b == PATIENTINFO_PACKET_HEADER[lookfor]) {
+//                    lookfor++;
+//                }
+//                else if (lookfor > 0) {
+//                    lookfor = 0;
+//                }
+//
+//                if (lookfor == PATIENTINFO_PACKET_HEADER.length) {
+//                    packetend = true;
+//                }
+//            }
+//            Log.d(TAG,"end of patient info packet found...");
+//
+//            //now start the packet read over again
+//            pktType1 = in.read();
+//            pktType2 = in.read();
+//            pktType = pktType1 + shift(pktType2,8);
+//
+//        }
+//    }
 
     public static int shift(int val, int shift){
         return (val << shift);
     }
 
-    private int readPatientPacket() throws IOException{
-        // Check the packet length...
-        plen = in.read() + shift(in.read(),8) + shift(in.read(),16) + shift(in.read(),24);
-        Log.d(TAG,"packet len: " + plen);
-
-        //read devtype
-        int devType = in.read() + shift(in.read(),8);
-        Log.d(TAG,"devtype: " + devType);
-
-        //get flag
-        int flag = in.read();
-        Log.d(TAG,"flag: " + flag);
-
-        //get time of measurement
-        int myear = in.read() + shift(in.read(),8);
-        int mmonth = in.read();
-        int mday = in.read();
-        int mhour = in.read();
-        int mmin = in.read();
-        int msec = in.read();
-        Log.d(TAG,"measurement time: " + mday + "/" + mmonth + "/" + myear + " " + mmin + ":" + msec);
-
-        //get time of transmission
-        int tyear = in.read() + shift(in.read(),8);
-        int tmonth = in.read();
-        int tday = in.read();
-        int thour = in.read();
-        int tmin = in.read();
-        int tsec = in.read();
-        Log.d(TAG,"transmission time: " + tday + "/" + tmonth + "/" + tyear + " " + tmin + ":" + tsec);
-
-        Date measurementDate=new Date();
-        Date transmissionDate=(Date)measurementDate.clone();
-        measurementDate.setYear(myear-1900);
-        measurementDate.setMonth(mmonth-1);
-        measurementDate.setDate(mday);
-        measurementDate.setHours(mhour);
-        measurementDate.setMinutes(mmin);
-        measurementDate.setSeconds(msec);
-        transmissionDate.setYear(tyear-1900);
-        transmissionDate.setMonth(tmonth-1);
-        transmissionDate.setDate(tday);
-        transmissionDate.setHours(thour);
-        transmissionDate.setMinutes(tmin);
-        transmissionDate.setSeconds(tsec);
-
-        //get bluetooth id of device
-        int id0 = in.read();
-        int id1 = in.read();
-        int id2 = in.read();
-        int id3 = in.read();
-        int id4 = in.read();
-        int id5 = in.read();
-        Log.d(TAG,"bluetooth id: " + id0 + ":" + id1 + ":" + id2 + ":" + id3 + ":" + id4 + ":" + id5);
-
-        //get device name and serial number
-        String devnameupper = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
-        String devserial = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() +
-            "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
-        String devnamelower = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() +
-            "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
-
-        //device battery status
-        int batterystatus = in.read();
-        Log.d(TAG,"battery status: " + batterystatus);
-
-        //skip reserved byte
-        in.skip(1);
-
-        //get device firmware/hardware
-        int devfirmwarehardware = in.read();
-
-        return devType;
-    }
+//    private int readPatientPacket() throws IOException{
+//        // Check the packet length...
+//        plen = in.read() + shift(in.read(),8) + shift(in.read(),16) + shift(in.read(),24);
+//        Log.d(TAG,"packet len: " + plen);
+//
+//        //read devtype
+//        int devType = in.read() + shift(in.read(),8);
+//        Log.d(TAG,"devtype: " + devType);
+//
+//        //get flag
+//        int flag = in.read();
+//        Log.d(TAG,"flag: " + flag);
+//
+//        //get time of measurement
+//        int myear = in.read() + shift(in.read(),8);
+//        int mmonth = in.read();
+//        int mday = in.read();
+//        int mhour = in.read();
+//        int mmin = in.read();
+//        int msec = in.read();
+//        Log.d(TAG,"measurement time: " + mday + "/" + mmonth + "/" + myear + " " + mmin + ":" + msec);
+//
+//        //get time of transmission
+//        int tyear = in.read() + shift(in.read(),8);
+//        int tmonth = in.read();
+//        int tday = in.read();
+//        int thour = in.read();
+//        int tmin = in.read();
+//        int tsec = in.read();
+//        Log.d(TAG,"transmission time: " + tday + "/" + tmonth + "/" + tyear + " " + tmin + ":" + tsec);
+//
+//        Date measurementDate=new Date();
+//        Date transmissionDate=(Date)measurementDate.clone();
+//        measurementDate.setYear(myear-1900);
+//        measurementDate.setMonth(mmonth-1);
+//        measurementDate.setDate(mday);
+//        measurementDate.setHours(mhour);
+//        measurementDate.setMinutes(mmin);
+//        measurementDate.setSeconds(msec);
+//        transmissionDate.setYear(tyear-1900);
+//        transmissionDate.setMonth(tmonth-1);
+//        transmissionDate.setDate(tday);
+//        transmissionDate.setHours(thour);
+//        transmissionDate.setMinutes(tmin);
+//        transmissionDate.setSeconds(tsec);
+//
+//        //get bluetooth id of device
+//        int id0 = in.read();
+//        int id1 = in.read();
+//        int id2 = in.read();
+//        int id3 = in.read();
+//        int id4 = in.read();
+//        int id5 = in.read();
+//        Log.d(TAG,"bluetooth id: " + id0 + ":" + id1 + ":" + id2 + ":" + id3 + ":" + id4 + ":" + id5);
+//
+//        //get device name and serial number
+//        String devnameupper = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
+//        String devserial = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() +
+//            "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
+//        String devnamelower = in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read() +
+//            "" + in.read() + "" + in.read() + "" + in.read() + "" + in.read();
+//
+//        //device battery status
+//        int batterystatus = in.read();
+//        Log.d(TAG,"battery status: " + batterystatus);
+//
+//        //skip reserved byte
+//        in.skip(1);
+//
+//        //get device firmware/hardware
+//        int devfirmwarehardware = in.read();
+//
+//        return devType;
+//    }
 
 
     public void onConnection(BluetoothSocket socket) throws IOException {
@@ -789,30 +790,30 @@ public class BluetoothSerialService {
         }
     }
 
-    private void readData(BluetoothSocket socket, String deviceType) throws IOException{
-        connectToDevice(socket);
-        setState(STATE_CONNECTED);
-        readPatientInfoPacket();
-        int devType = readPatientPacket();
-        Log.d(TAG, "## device type " + deviceType);
-
-        if(socket!=null) {
-            BluetoothDevice connectedBTDevice = socket.getRemoteDevice(); //gives the currently connected device
-            if(connectedBTDevice!=null) {
-                Log.d(TAG, "## connected BT device " + connectedBTDevice.getName());
-                connectedBlueToothDevice = connectedBTDevice;
-            }
-        }
-        Log.d(TAG, " Connected device type " + connectedBlueToothDevice.getName());
-        if(devType == 766 || connectedBlueToothDevice.getName().contains("UA-767") ) { //device keeps on getting changed, recheck device frm data obtained
-            onBPDataPacket();
-        } else {
-            onScaleDataPacket();
-        }
-
-        sendAcknowledgement();
-         closeConnection();  //nehal trial
-    }
+//    private void readData(BluetoothSocket socket, String deviceType) throws IOException{
+//        connectToDevice(socket);
+//        setState(STATE_CONNECTED);
+//        readPatientInfoPacket();
+//        int devType = readPatientPacket();
+//        Log.d(TAG, "## device type " + deviceType);
+//
+//        if(socket!=null) {
+//            BluetoothDevice connectedBTDevice = socket.getRemoteDevice(); //gives the currently connected device
+//            if(connectedBTDevice!=null) {
+//                Log.d(TAG, "## connected BT device " + connectedBTDevice.getName());
+//                connectedBlueToothDevice = connectedBTDevice;
+//            }
+//        }
+//        Log.d(TAG, " Connected device type " + connectedBlueToothDevice.getName());
+//        if(devType == 766 || connectedBlueToothDevice.getName().contains("UA-767") ) { //device keeps on getting changed, recheck device frm data obtained
+//            onBPDataPacket();
+//        } else {
+//            onScaleDataPacket();
+//        }
+//
+//        sendAcknowledgement();
+//         closeConnection();  //nehal trial
+//    }
 
     /**
      * This thread runs during a connection with a remote device.
@@ -825,7 +826,7 @@ public class BluetoothSerialService {
         BluetoothDevice btDevice;
 
         public ConnectedThread(BluetoothSocket socket, String socketType, BluetoothDevice device) {
-            Log.d(TAG, "create ConnectedThread: " + socketType);
+            Log.d(TAG, "create ConnectedThread: " + socketType + " thread " + this);
             btDevice = device;
             mmSocket = socket;
             InputStream tmpIn = null;
@@ -844,6 +845,8 @@ public class BluetoothSerialService {
             mmOutStream = tmpOut;
             Log.d(TAG, "mmInStream " + mmInStream);
             Log.d(TAG, "mmInStream " + mmInStream);
+
+
         }
 
         public void run() {
@@ -855,6 +858,13 @@ public class BluetoothSerialService {
             while (true) {
                 try {
                     // Read from the InputStream
+//                    try {
+//                        Log.d(TAG, "Sleeping this thread for  a while " + this);
+//                        sleep(10000);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+
                     bytes = mmInStream.read(buffer);
                     String data = new String(buffer, 0, bytes);
 
