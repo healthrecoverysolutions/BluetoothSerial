@@ -860,7 +860,7 @@ public class BluetoothSerialService {
                     // Read from the InputStream
 //                    try {
 //                        Log.d(TAG, "Sleeping this thread for  a while " + this);
-//                        sleep(10000);
+//                        sleep(5000);
 //                    } catch (InterruptedException e) {
 //                        e.printStackTrace();
 //                    }

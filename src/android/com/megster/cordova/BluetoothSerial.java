@@ -182,6 +182,10 @@ public class BluetoothSerial extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView){
         Log.d(TAG, "Initialize plugin & queue");
+        if(queuedClassicDevices!=null) {
+            queuedClassicDevices.clear();
+            Log.d(TAG, "Clearing the queue");
+        }
     }
 
     @Override
@@ -218,7 +222,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
         } else if (action.equals(DISCONNECT)) {
             Log.d(TAG, "Calling disconnect ---<><> commented for now! ");
-          //  disconnect(callbackContext);
+            disconnect(callbackContext);
 
         } else if (action.equals(WRITE)) {
 
@@ -382,8 +386,14 @@ public class BluetoothSerial extends CordovaPlugin {
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
         Log.d(TAG, "## Disconnect event making connect callback null");
         connectCallback = null;
+//        BluetoothDevice connectedDevice = bluetoothSerialService.getConnectedDevice();
+//        queuedClassicDevices.remove(connectedDevice);
+      //  queuedClassicDevices.clear();
+      //  Log.d(TAG, "CLEARING the QUEUE");
         bluetoothSerialService.stop();
+
         callbackContext.success();
+
 
     }
     private boolean hasBluetoothPermissions() {
@@ -621,7 +631,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
     private void addToQueue(ClassicDevice upcomingDevice) {
         if (queuedClassicDevices!=null) {
-            if (!queuedClassicDevices.contains(upcomingDevice)) {
+            if (!queuedClassicDevices.contains(upcomingDevice)) { //new cleanup possibility-> TODO if already connected device is requesting to be added, dont add that
                 queuedClassicDevices.add(upcomingDevice);
                 Log.d(TAG, "## Added to queue ");
                 Log.d(TAG, "## Queue size ## " + queuedClassicDevices.size());
@@ -760,6 +770,7 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private void notifyConnectionSuccess() {
+        Log.d(TAG, "Notofy connection success to pluginn ---->> " + connectCallback);
         if (connectCallback != null) {
 
             BluetoothDevice connectedDevice;
