@@ -370,9 +370,9 @@ public class BluetoothSerial extends CordovaPlugin {
         public static boolean isSupported(BluetoothDevice device) {
             if(device!=null) {
                 String text = device.getName();
-                Log.d(TAG, "IS SPP PROFILE DEVICE text ---> " + text);
+
                 for (SPPProfileDevice b : SPPProfileDevice.values()) {
-                    Log.d(TAG, "IS SPP PROFILE DEVICE b.text ---> " + b.text);
+
                     if (text != null && text.indexOf(b.text) > 0) {
                         Log.d(TAG, "IS SPP PROFILE DEVICE ---> " + b.text);
                         return true;
@@ -386,10 +386,7 @@ public class BluetoothSerial extends CordovaPlugin {
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
         Log.d(TAG, "## Disconnect event making connect callback null");
         connectCallback = null;
-//        BluetoothDevice connectedDevice = bluetoothSerialService.getConnectedDevice();
-//        queuedClassicDevices.remove(connectedDevice);
-      //  queuedClassicDevices.clear();
-      //  Log.d(TAG, "CLEARING the QUEUE");
+
         bluetoothSerialService.stop();
 
         callbackContext.success();
@@ -699,10 +696,10 @@ public class BluetoothSerial extends CordovaPlugin {
                     break;
                 case MESSAGE_READ_RAW:
                     Log.d(TAG, "Read RAW message now sending to subscriber " + rawDataAvailableCallback);
+
                     if (rawDataAvailableCallback != null) {  Log.d(TAG, "Read RAW message now definitely sending to subscriber ");
                         byte[] bytes = (byte[]) msg.obj;
                         sendRawDataToSubscriber(bytes);
-
                     }
                     break;
                 case MESSAGE_STATE_CHANGE:
