@@ -19,6 +19,7 @@ import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
@@ -319,15 +320,49 @@ public class BluetoothSerialService {
 //                !device.getName().contains("UC-355") &&
 //                !device.getName().contains("UC-351")
 //        ) {
-            mConnectedThread = new ConnectedThread(socket, socketType, device);
-            mConnectedThread.start();
+        //TODO add 500 ms sleep to check that null subscriber issue in case of stored readings
 
-            // Send the name of the connected device back to the UI Activity
-            Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_DEVICE_NAME);
-            Bundle bundle = new Bundle();
-            bundle.putString(BluetoothSerial.DEVICE_NAME, device.getName());
-            msg.setData(bundle);
-            mHandler.sendMessage(msg);
+//                    try {
+//                        Log.d(TAG, "Sleeping this thread for  a while ------- " +this);
+//                        Thread.sleep(500);
+//                      //  sleep(500);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+
+        /// handler me call -- 1 sec or 500 ms
+        Log.d(TAG, "Connected device --> " + device.getName());
+        mConnectedThread = new ConnectedThread(socket, socketType, device);
+        Handler handler=new Handler(Looper.getMainLooper());
+        Runnable r=new Runnable() {
+            public void run() {
+                Log.d(TAG, "CALLING TO Start connected thread after sleep 1 seconds " + this);
+                //what ever you do here will be done after 3 seconds delay.
+
+                mConnectedThread.start();
+
+
+            }
+        };
+        handler.postDelayed(r, 1000);
+
+        // Send the name of the connected device back to the UI Activity
+        Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_DEVICE_NAME);
+        Bundle bundle = new Bundle();
+        bundle.putString(BluetoothSerial.DEVICE_NAME, device.getName());
+        msg.setData(bundle);
+        mHandler.sendMessage(msg);
+
+
+//            mConnectedThread = new ConnectedThread(socket, socketType, device);
+//            mConnectedThread.start();
+//
+//            // Send the name of the connected device back to the UI Activity
+//            Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_DEVICE_NAME);
+//            Bundle bundle = new Bundle();
+//            bundle.putString(BluetoothSerial.DEVICE_NAME, device.getName());
+//            msg.setData(bundle);
+//            mHandler.sendMessage(msg);
 
   //     }
   //    setState(STATE_CONNECTED); //TODO COMMENTED code to be reverted
@@ -454,12 +489,13 @@ public class BluetoothSerialService {
                 try {
                     // This is a blocking call and will only return on a
                     // successful connection or an exception
+                    Log.d(TAG, "Trying to connect via Accept thread --->>" );
                     socket = mmServerSocket.accept();
                 } catch (IOException e) {
                     Log.e(TAG, "Socket Type: " + mSocketType + "accept() failed", e);
                     break;
                 }
-
+                Log.d(TAG, "Acccept thread -- connection was accepted --->> state "+mState );
                 // If a connection was accepted
                 if (socket != null) {
                     synchronized (BluetoothSerialService.this) {
@@ -864,6 +900,7 @@ public class BluetoothSerialService {
 //                    } catch (InterruptedException e) {
 //                        e.printStackTrace();
 //                    }
+
 
                     bytes = mmInStream.read(buffer);
                     String data = new String(buffer, 0, bytes);
