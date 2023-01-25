@@ -65,20 +65,11 @@ public class BluetoothSerialService {
     public static final int STATE_LISTEN = 1;     // now listening for incoming connections
     public static final int STATE_CONNECTING = 2; // now initiating an outgoing connection
     public static final int STATE_CONNECTED = 3;  // now connected to a remote device
-    private Timer bluetooth_timer = null;
-    private int bluetooth_timeout=2*1000*60;
+
     private InputStream in=null;
     private OutputStream out=null;
     private android.bluetooth.BluetoothDevice bluetoothDevice;
-    private int plen = 0;
-    private int[] PATIENTINFO_PACKET_HEADER = new int[]{80, 87, 67, 65, 80, 73};  //PWCAPI
-    private int dataBPPacketSize=10; // BP
-    private int dataWeightPacketSize=14; // Weight
-    private Date connectionTime=null;
     private BluetoothDevice connectedBlueToothDevice;
-    // private static SPPAcceptThread sppAcceptThread;
-
-    public int getDataPacketLength(){return plen;}
 
     public void resetConnectedBTDevice() {
         connectedBlueToothDevice = null;
@@ -124,8 +115,6 @@ public class BluetoothSerialService {
 
 
 
-
-
     /**
      * Start the chat service. Specifically start AcceptThread to begin a
      * session in listening (server) mode. Called by the Activity onResume() */
@@ -147,7 +136,7 @@ public class BluetoothSerialService {
             }
         }
 
-        setState(STATE_LISTEN);
+        setState(STATE_LISTEN);  // set the state to listen until device is connected
 
     }
 
@@ -187,7 +176,7 @@ public class BluetoothSerialService {
      * @param device  The BluetoothDevice that has been connected
      */
     public synchronized void connected(BluetoothSocket socket, BluetoothDevice device, final String socketType) {
-        setState(STATE_CONNECTED);
+        setState(STATE_CONNECTED); // Moved this to start of connected, as this message needs to be passed to PCMT as soon as any SPP device connects itself so that we can early subscribe for data'
         if (D) Log.d(TAG, "connected, Socket Type:" + socketType);
 
         // Cancel the thread that completed the connection
@@ -207,10 +196,11 @@ public class BluetoothSerialService {
         }
 
         mConnectedThread = new ConnectedThread(socket, socketType, device);
+        // Starting the connect thread a second later, as for SPP devices with stored data, they start transmitting as soon as they connect.
+        // If we have not subscribed to listed to them till that time, the data might get lost. Thus we want the connect event message to be passed from plugin to PCMT and let PCMT subscribe for data during this time
         Handler handler=new Handler(Looper.getMainLooper());
         Runnable r=new Runnable() {
             public void run() {
-                Log.d(TAG, "CALLING TO Start connected thread after sleep 1 seconds " + this);
 
                 mConnectedThread.start();
             }
@@ -223,8 +213,6 @@ public class BluetoothSerialService {
         bundle.putString(BluetoothSerial.DEVICE_NAME, device.getName());
         msg.setData(bundle);
         mHandler.sendMessage(msg);
-
-  //    setState(STATE_CONNECTED); //TODO COMMENTED code to be reverted
 
     }
 
@@ -255,7 +243,6 @@ public class BluetoothSerialService {
         }
 
         connectedBlueToothDevice = null;
-        Log.d("AB", "On service stop --- Made connected bluetooth device as null ");
         setState(STATE_NONE);
     }
 
@@ -322,12 +309,12 @@ public class BluetoothSerialService {
             Log.d(TAG, "Accept thread" + mSocketType);
 
             try {
-//                if (secure) {
+                // Commenting these service name for SDP and its UUID as currently for SPP Profile devices these are not useful.
+                //                if (secure) {
 //                    tmp = mAdapter.listenUsingRfcommWithServiceRecord(NAME_SECURE, MY_UUID_SECURE);
 //                } else {
 //                    tmp = mAdapter.listenUsingInsecureRfcommWithServiceRecord(NAME_INSECURE, MY_UUID_INSECURE);
 //                }
-
                 tmp = mAdapter.listenUsingInsecureRfcommWithServiceRecord("PWAccessP", UUID_SPP);
             } catch (IOException e) {
                 Log.e(TAG, "Socket Type: " + mSocketType + "listen() failed", e);
@@ -362,12 +349,12 @@ public class BluetoothSerialService {
                             case STATE_LISTEN:
                             case STATE_CONNECTING:
                                 // Situation normal. Start the connected thread.
-                                Log.d(TAG, "Calling accept thread connect ----------");
+                                Log.d(TAG, "Calling accept thread connect");
                                 connected(socket, socket.getRemoteDevice(),
                                     mSocketType);
                                 break;
                             case STATE_NONE:
-                            case STATE_CONNECTED: Log.d(TAG, "Calling accept thread CLOSE SOCKET ----------");
+                            case STATE_CONNECTED: Log.d(TAG, "Calling accept thread CLOSE SOCKET");
                                 // Either not ready or already connected. Terminate new socket.
                                 try {
                                     socket.close();
@@ -420,14 +407,15 @@ public class BluetoothSerialService {
 
             // Get a BluetoothSocket for a connection with the given BluetoothDevice
 
-                Log.d(TAG, "Creating Socket connection 111 ");
+                Log.d(TAG, "Creating Socket connection");
 
                 try {
-//                    if (secure) {
-//                        tmp = device.createRfcommSocketToServiceRecord(UUID_SPP);
-//                    } else {
+                    if (secure) {
+                        tmp = device.createRfcommSocketToServiceRecord(UUID_SPP);
+                    } else {
                         tmp = device.createInsecureRfcommSocketToServiceRecord(UUID_SPP);
-                   // }
+                    }
+                    Log.d(TAG, "Created a secure = " + secure + " RFCOMM connection");
                 } catch (IOException e) {
                     Log.e(TAG, "Socket Type: " + mSocketType + "create() failed", e);
                 }
@@ -492,14 +480,9 @@ public class BluetoothSerialService {
     }
 
 
-    public static int shift(int val, int shift){
-        return (val << shift);
-    }
-
-
     public void onConnection(BluetoothSocket socket) throws IOException {
         Log.d(TAG, "onConnection" + socket);
-        connectionTime = new Date();
+
         if (socket!=null) {
             in = socket.getInputStream();
             out = socket.getOutputStream();
@@ -606,83 +589,6 @@ public class BluetoothSerialService {
         }
     }
 
-    public void onScaleDataPacket() throws IOException {
-        //now get the scale data packet information
-        int i = 0;
-        String datastr = "";
-        while (i < dataWeightPacketSize) {
-            datastr = datastr + (char) in.read();
-            i++;
-        }
-        Log.d(TAG,"scale data: " + datastr);
-
-        //if the reported length was more than 14, skip the rest of the data
-        if (getDataPacketLength() > dataWeightPacketSize) {
-            in.skip(getDataPacketLength() - dataWeightPacketSize);
-        }
-
-        //parse reading
-        double w = 0;
-        String readingval = datastr.substring(4, 10);
-        String readingtype = datastr.substring(10, 12);
-        Log.d(TAG,"parsing: " + readingval);
-        Log.d(TAG,"reading type: " + readingtype);
-        //force lb as reading type
-        if (readingtype.equals("lb")) {
-            w = Double.valueOf(readingval);
-            Log.d(TAG, "weight weight" + w);
-            Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_READ);
-            msg.obj = w;
-            mHandler.sendMessage(msg);
-        } else if (readingtype.equals("kg")){
-            //convert kg to lbs
-            w = Double.valueOf(readingval);
-            w = kgTolbs(w);
-            Log.d(TAG,"converted to lbs: " + w);
-            Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_READ);
-            msg.obj = w;
-            mHandler.sendMessage(msg);
-        }
-
-    }
-
-    //functions
-    public static double kgTolbs(double kg){
-        kg = kg * 2.20462;
-        int kgi = (int)(kg*10);
-        double lbs = (double)kgi/10.0;
-        return lbs;
-    }
-
-    public void onBPDataPacket() throws IOException {
-        int i = 0;
-        String datastr = "";
-        while (i < dataBPPacketSize) {
-            datastr = datastr + (char) in.read();
-            i++;
-        }
-
-        Log.d(TAG,"Datastring for blood pressure packet " + datastr);
-
-        Message msg = mHandler.obtainMessage(BluetoothSerial.MESSAGE_READ);
-        msg.obj = datastr;
-        mHandler.sendMessage(msg);
-    }
-
-    private void sendAcknowledgement(){
-        //now send response to acknowledge
-        try{
-            String msg = "PWA4"; // "PWA1"; //PWA4 to send data accpet without disconnet
-            byte[] send = msg.getBytes();
-            out.write(send);
-            out.flush();
-        }
-        catch(Exception e){e.printStackTrace();}
-    }
-
-    private void closeConnection() throws IOException{
-        closeBluetoothConnection();
-    }
 
     public synchronized BluetoothDevice getConnectedDevice() {
         if (connectedBlueToothDevice!=null) {
@@ -693,11 +599,4 @@ public class BluetoothSerialService {
         }
     }
 
-    protected void closeBluetoothConnection()  {
-        //try catching NPE for all before closing
-        try{if(in!=null) {in.close();}}catch(Exception e){e.printStackTrace();}
-        try{if(out!=null) {out.close();}}catch(Exception e){e.printStackTrace();}
-        try{if(mmSocket!=null) {mmSocket.close();}}catch(Exception e){e.printStackTrace();}
-        setState(STATE_NONE);
-    }
 }

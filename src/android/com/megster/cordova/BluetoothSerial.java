@@ -221,7 +221,7 @@ public class BluetoothSerial extends CordovaPlugin {
             connect(args, secure, callbackContext);
 
         } else if (action.equals(DISCONNECT)) {
-            Log.d(TAG, "Calling disconnect ---<><> commented for now! ");
+
             disconnect(callbackContext);
 
         } else if (action.equals(WRITE)) {
@@ -384,15 +384,11 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
-        Log.d(TAG, "## Disconnect event making connect callback null");
         connectCallback = null;
-
         bluetoothSerialService.stop();
-
         callbackContext.success();
-
-
     }
+
     private boolean hasBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) { // for android 12 check for Nearby devices permission
             return cordova.hasPermission(BLUETOOTH_SCAN) && cordova.hasPermission(BLUETOOTH_CONNECT);
@@ -587,8 +583,6 @@ public class BluetoothSerial extends CordovaPlugin {
         Log.d(TAG, "## Processing incoming connect for device " + device.getName());
         Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
 
-       // connectClassic(device, secure, callbackContext); nehal
-
         synchronized (queuedClassicDevices) {
             if(!bondedDevices.contains(device)) {
                 Log.d(TAG, "This is a device which has requested to pair --- ");
@@ -628,7 +622,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
     private void addToQueue(ClassicDevice upcomingDevice) {
         if (queuedClassicDevices!=null) {
-            if (!queuedClassicDevices.contains(upcomingDevice)) { //new cleanup possibility-> TODO if already connected device is requesting to be added, dont add that
+            if (!queuedClassicDevices.contains(upcomingDevice)) {
                 queuedClassicDevices.add(upcomingDevice);
                 Log.d(TAG, "## Added to queue ");
                 Log.d(TAG, "## Queue size ## " + queuedClassicDevices.size());
@@ -648,13 +642,13 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private synchronized void connectClassic(BluetoothDevice device, boolean secure, CallbackContext callbackContext) {
-      //  executeQueueHandler();
+
         Log.d(TAG, "## Connect to classic " + device.getName());
         if (device != null) {
 
             connectCallback = callbackContext;
             //Based on device, we need to either call Start or Connect
-            if(/*isSPPListenerNeeded(device)*/ SPPProfileDevice.isSupported(device)) { //For devices which need SPP Listener
+            if(SPPProfileDevice.isSupported(device)) { //For devices which need SPP Listener, we only start Accept thread, call connect only for pairing purpose
                 bluetoothSerialService.start(device);
                 Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
                 if(!bondedDevices.contains(device)) { // Connect only for pairing
@@ -767,7 +761,7 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private void notifyConnectionSuccess() {
-        Log.d(TAG, "Notofy connection success to pluginn ---->> " + connectCallback);
+        Log.d(TAG, "Notify connection success to plugin ---->> " + connectCallback);
         if (connectCallback != null) {
 
             BluetoothDevice connectedDevice;
