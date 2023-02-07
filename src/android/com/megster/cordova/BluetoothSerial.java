@@ -16,9 +16,11 @@ import android.os.Handler;
 import android.os.Message;
 import android.provider.Settings;
 import android.util.Log;
+
 import org.apache.cordova.CordovaArgs;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaWebView;
@@ -27,6 +29,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.reflect.Method;
 import java.util.Objects;
 
 import java.util.Set;
@@ -60,6 +63,7 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String CLEAR_DEVICE_DISCOVERED_LISTENER = "clearDeviceDiscoveredListener";
     private static final String SET_NAME = "setName";
     private static final String SET_DISCOVERABLE = "setDiscoverable";
+    private static final String UNPAIR_DEVICE ="unPairDevice";
 
     // callbacks
     private CallbackContext connectCallback;
@@ -339,12 +343,43 @@ public class BluetoothSerial extends CordovaPlugin {
             discoverIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, discoverableDuration);
             cordova.getActivity().startActivity(discoverIntent);
 
+        } else if (action.equals(UNPAIR_DEVICE)) {
+            Log.d(TAG, "unpair devic called -- ");
+            unPairDevice(args, callbackContext);
+
         } else {
             validAction = false;
 
         }
 
         return validAction;
+    }
+
+    public void unPairDevice(CordovaArgs args, CallbackContext callbackContext) {
+        String macAddress = null;
+        try {
+            macAddress = args.getString(0);
+
+            BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+            Log.d(TAG, "## Processing incoming connect for device " + device.getName());
+            if (device != null) {
+                try {
+                    Method method = device.getClass().getMethod("removeBond", (Class[]) null);
+                    method.invoke(device, (Object[]) null);
+                    LOG.i(TAG, "Successfully removed bond");
+                } catch (Exception e) {
+                    LOG.e(TAG, "ERROR: could not remove bond");
+                    e.printStackTrace();
+                }
+                callbackContext.success();
+            } else {
+                String message = "Peripheral " + macAddress + " not found.";
+                LOG.w(TAG, message);
+                callbackContext.error(message);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
