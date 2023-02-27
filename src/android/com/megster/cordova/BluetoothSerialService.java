@@ -201,8 +201,9 @@ public class BluetoothSerialService {
         Handler handler=new Handler(Looper.getMainLooper());
         Runnable r=new Runnable() {
             public void run() {
-
-                mConnectedThread.start();
+                if (mConnectedThread != null) {
+                    mConnectedThread.start();
+                }
             }
         };
         handler.postDelayed(r, 1000);
