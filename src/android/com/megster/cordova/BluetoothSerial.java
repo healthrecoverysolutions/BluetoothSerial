@@ -16,33 +16,24 @@ import android.os.Handler;
 import android.os.Message;
 import android.provider.Settings;
 import android.util.Log;
+
 import org.apache.cordova.CordovaArgs;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
-import org.apache.cordova.PermissionHelper;
+import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaWebView;
-import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Objects;
-import java.util.TreeSet;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * PhoneGap Plugin for Serial Communication over Bluetooth
@@ -72,6 +63,7 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String CLEAR_DEVICE_DISCOVERED_LISTENER = "clearDeviceDiscoveredListener";
     private static final String SET_NAME = "setName";
     private static final String SET_DISCOVERABLE = "setDiscoverable";
+    private static final String UNPAIR_DEVICE ="unPairDevice";
 
     // callbacks
     private CallbackContext connectCallback;
@@ -116,8 +108,8 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String ACCESS_FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION;
 
     private BluetoothBroadcastReceiver aclConnectEventReceiver;
-    private static ConcurrentLinkedQueue<ClassicDevice> queuedClassicDevices = new ConcurrentLinkedQueue<ClassicDevice>();
-    private Handler queueHandler = new Handler();
+   private static ConcurrentLinkedQueue<ClassicDevice> queuedClassicDevices = new ConcurrentLinkedQueue<ClassicDevice>();
+   private Handler queueHandler = new Handler();
 
     public void registerStateChangeReceiver(Context context) {
         if(aclConnectEventReceiver == null) {
@@ -194,6 +186,10 @@ public class BluetoothSerial extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView){
         Log.d(TAG, "Initialize plugin & queue");
+        if(queuedClassicDevices!=null) {
+            queuedClassicDevices.clear();
+            Log.d(TAG, "Clearing the queue");
+        }
     }
 
     @Override
@@ -218,6 +214,7 @@ public class BluetoothSerial extends CordovaPlugin {
 
         } else if (action.equals(CONNECT)) {
 
+            Log.d(TAG, "Connect Called from Plugin");
             boolean secure = true;
             connect(args, secure, callbackContext);
 
@@ -317,7 +314,7 @@ public class BluetoothSerial extends CordovaPlugin {
             cordova.startActivityForResult(this, intent, REQUEST_ENABLE_BLUETOOTH);
 
         } else if (action.equals(DISCOVER_UNPAIRED)) {
-           
+
             if (hasBluetoothPermissions()) {
                 discoverUnpairedDevices(callbackContext);
             } else {
@@ -346,6 +343,10 @@ public class BluetoothSerial extends CordovaPlugin {
             discoverIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, discoverableDuration);
             cordova.getActivity().startActivity(discoverIntent);
 
+        } else if (action.equals(UNPAIR_DEVICE)) {
+            Log.d(TAG, "unpair devic called -- ");
+            unPairDevice(args, callbackContext);
+
         } else {
             validAction = false;
 
@@ -354,14 +355,75 @@ public class BluetoothSerial extends CordovaPlugin {
         return validAction;
     }
 
+    public void unPairDevice(CordovaArgs args, CallbackContext callbackContext) {
+        String macAddress = null;
+        try {
+            macAddress = args.getString(0);
+
+            BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+            Log.d(TAG, "## Processing incoming connect for device " + device.getName());
+            if (device != null) {
+                try {
+                    Method method = device.getClass().getMethod("removeBond", (Class[]) null);
+                    method.invoke(device, (Object[]) null);
+                    LOG.i(TAG, "Successfully removed bond");
+                } catch (Exception e) {
+                    LOG.e(TAG, "ERROR: could not remove bond");
+                    e.printStackTrace();
+                }
+                callbackContext.success();
+            } else {
+                String message = "Peripheral " + macAddress + " not found.";
+                LOG.w(TAG, message);
+                callbackContext.error(message);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * This enum lists all the classic devices which use Serial Port Profile for connection. It's is one of the more fundamental Bluetooth profiles.
+     * Using SPP, each connected device can send and receive data just as if there were RX and TX lines connected between them.
+     * For us, AnD classic devices use this. For future, add any other device which uses SPP here.
+     */
+    public enum SPPProfileDevice {
+        AND_CLASSIC_351("UC-351"),
+        AND_CLASSIC_355("UC-355"),
+        AND_CLASSIC_767("UA-767");
+
+        private String text;
+
+        SPPProfileDevice(String text) {
+            this.text = text;
+        }
+
+        public String getText() {
+            return this.text;
+        }
+
+        public static boolean isSupported(BluetoothDevice device) {
+            if(device!=null) {
+                String text = device.getName();
+
+                for (SPPProfileDevice b : SPPProfileDevice.values()) {
+
+                    if (text != null && text.indexOf(b.text) > 0) {
+                        Log.d(TAG, "IS SPP PROFILE DEVICE ---> " + b.text);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    }
 
     private /*synchronized*/ void disconnect(CallbackContext callbackContext) {
-        Log.d(TAG, "## Disconnect event making connect callback null");
         connectCallback = null;
         bluetoothSerialService.stop();
         callbackContext.success();
-
     }
+
     private boolean hasBluetoothPermissions() {
         if (Build.VERSION.SDK_INT >= 31) { // for android 12 check for Nearby devices permission
             return cordova.hasPermission(BLUETOOTH_SCAN) && cordova.hasPermission(BLUETOOTH_CONNECT);
@@ -555,6 +617,7 @@ public class BluetoothSerial extends CordovaPlugin {
         BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
         Log.d(TAG, "## Processing incoming connect for device " + device.getName());
         Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+
         synchronized (queuedClassicDevices) {
             if(!bondedDevices.contains(device)) {
                 Log.d(TAG, "This is a device which has requested to pair --- ");
@@ -565,9 +628,15 @@ public class BluetoothSerial extends CordovaPlugin {
 
             }
 
+            if (bluetoothSerialService!=null) {
+                Log.d(TAG, "## Service STATE " + bluetoothSerialService.getState());
+            }
+
             if (bluetoothSerialService!=null && (bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTING
-                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED)) {
+                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_CONNECTED
+                || bluetoothSerialService.getState() == BluetoothSerialService.STATE_LISTEN)) {
                 Log.d(TAG, "## Service already connecting so do nothing == -- only adding to the queue");
+
                 addToQueue(new ClassicDevice(device, secure, callbackContext));
             } else {
                 if (queuedClassicDevices.isEmpty()) {
@@ -608,13 +677,24 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private synchronized void connectClassic(BluetoothDevice device, boolean secure, CallbackContext callbackContext) {
-        executeQueueHandler();
+
         Log.d(TAG, "## Connect to classic " + device.getName());
         if (device != null) {
 
             connectCallback = callbackContext;
-            bluetoothSerialService.start(device);
-            bluetoothSerialService.connect(device, secure);
+            //Based on device, we need to either call Start or Connect
+            if(SPPProfileDevice.isSupported(device)) { //For devices which need SPP Listener, we only start Accept thread, call connect only for pairing purpose
+                bluetoothSerialService.start(device);
+                Set<BluetoothDevice> bondedDevices = bluetoothAdapter.getBondedDevices();
+                if(!bondedDevices.contains(device)) { // Connect only for pairing
+                    Log.d(TAG, "BONDED DEVICE NOT FOUND --connect for pairing ");
+                    bluetoothSerialService.connect(device, secure);
+                }
+            } else {  // for rest  all devices, connect for pairing and reading
+                bluetoothSerialService.connect(device, secure);
+            }
+
+
             buffer.setLength(0);
 
             PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
@@ -645,6 +725,7 @@ public class BluetoothSerial extends CordovaPlugin {
                     break;
                 case MESSAGE_READ_RAW:
                     Log.d(TAG, "Read RAW message now sending to subscriber " + rawDataAvailableCallback);
+
                     if (rawDataAvailableCallback != null) {  Log.d(TAG, "Read RAW message now definitely sending to subscriber ");
                         byte[] bytes = (byte[]) msg.obj;
                         sendRawDataToSubscriber(bytes);
@@ -692,7 +773,7 @@ public class BluetoothSerial extends CordovaPlugin {
             connectCallback = null;
 
         }
-        processNextEnqueuedClassicDevice();
+      processNextEnqueuedClassicDevice();
     }
 
     private synchronized void processNextEnqueuedClassicDevice() {
@@ -715,6 +796,7 @@ public class BluetoothSerial extends CordovaPlugin {
     }
 
     private void notifyConnectionSuccess() {
+        Log.d(TAG, "Notify connection success to plugin ---->> " + connectCallback);
         if (connectCallback != null) {
 
             BluetoothDevice connectedDevice;

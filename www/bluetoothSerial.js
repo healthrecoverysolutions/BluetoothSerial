@@ -129,8 +129,11 @@ module.exports = {
 
     setDiscoverable: function (discoverableDuration) {
         cordova.exec(null, null, "BluetoothSerial", "setDiscoverable", [discoverableDuration]);
-    }
+    },
 
+    unPairDevice: function (macAddress, success, failure) {
+        cordova.exec(success, failure, "BluetoothSerial", "unPairDevice", [macAddress]);
+    }
 
 };
 
