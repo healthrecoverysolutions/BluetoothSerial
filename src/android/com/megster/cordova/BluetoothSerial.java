@@ -35,6 +35,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import timber.log.Timber;
+
 /**
  * PhoneGap Plugin for Serial Communication over Bluetooth
  */
@@ -543,8 +545,13 @@ public class BluetoothSerial extends CordovaPlugin {
 
         filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
         activity.registerReceiver(discoverReceiver, filter);
-
-        bluetoothAdapter.startDiscovery();
+        // Do not start a new discovery if we already have an ongoing one
+        if(!bluetoothAdapter.isDiscovering()) {
+            Timber.v("Will start BT device discovery");
+            bluetoothAdapter.startDiscovery();
+        } else {
+            Timber.v("BT adapter is discovering hence not will not start a scan");
+        }
     }
 
     private JSONObject deviceToJSON(BluetoothDevice device) throws JSONException {
@@ -554,6 +561,20 @@ public class BluetoothSerial extends CordovaPlugin {
             json.put("name", device.getName());
             json.put("address", device.getAddress());
             json.put("id", device.getAddress());
+            int deviceType = device.getType();
+
+            if(deviceType == BluetoothDevice.DEVICE_TYPE_CLASSIC)
+            {
+                json.put("type", "DEVICE_TYPE_CLASSIC");
+            }
+            else if(deviceType == BluetoothDevice.DEVICE_TYPE_LE)
+            {
+                json.put("type", "DEVICE_TYPE_LE");
+            }
+            else if(deviceType == BluetoothDevice.DEVICE_TYPE_DUAL)
+            {
+                json.put("type", "DEVICE_TYPE_DUAL");
+            }
             if (device.getBluetoothClass() != null) {
                 json.put("class", device.getBluetoothClass().getDeviceClass());
             }
