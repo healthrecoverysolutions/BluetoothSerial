@@ -66,6 +66,7 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String SET_NAME = "setName";
     private static final String SET_DISCOVERABLE = "setDiscoverable";
     private static final String UNPAIR_DEVICE ="unPairDevice";
+    private static final String CANCEL_DISCOVERY = "cancelDiscovery";
 
     // callbacks
     private CallbackContext connectCallback;
@@ -349,7 +350,10 @@ public class BluetoothSerial extends CordovaPlugin {
             Log.d(TAG, "unpair devic called -- ");
             unPairDevice(args, callbackContext);
 
-        } else {
+        } else if (action.equals(CANCEL_DISCOVERY)) {
+            cancelDiscovery();
+        }
+        else {
             validAction = false;
 
         }
@@ -551,6 +555,16 @@ public class BluetoothSerial extends CordovaPlugin {
             bluetoothAdapter.startDiscovery();
         } else {
             Timber.v("BT adapter is discovering hence not will not start a scan");
+        }
+    }
+
+    private void cancelDiscovery() {
+        if(bluetoothAdapter!=null) {
+            if(bluetoothAdapter.isDiscovering()) {
+                Timber.v("Canceling device discovery");
+                bluetoothAdapter.cancelDiscovery();
+                this.deviceDiscoveredCallback = null; // clearing device discovered callback
+            }
         }
     }
 
