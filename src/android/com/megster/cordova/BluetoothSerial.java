@@ -317,12 +317,15 @@ public class BluetoothSerial extends CordovaPlugin {
             cordova.startActivityForResult(this, intent, REQUEST_ENABLE_BLUETOOTH);
 
         } else if (action.equals(DISCOVER_UNPAIRED)) {
-
-            if (hasBluetoothPermissions()) {
-                discoverUnpairedDevices(callbackContext);
+            if (!isDeviceDiscoveryOn()) {
+                if (hasBluetoothPermissions()) {
+                    discoverUnpairedDevices(callbackContext);
+                } else {
+                    permissionCallback = callbackContext;
+                    requestPermissions();
+                }
             } else {
-                permissionCallback = callbackContext;
-                requestPermissions();
+                Timber.v("Device discovery in progress, not starting it again");
             }
 
         } else if (action.equals(SET_DEVICE_DISCOVERED_LISTENER)) {
@@ -551,11 +554,15 @@ public class BluetoothSerial extends CordovaPlugin {
         activity.registerReceiver(discoverReceiver, filter);
         // Do not start a new discovery if we already have an ongoing one
         if(!bluetoothAdapter.isDiscovering()) {
-            Timber.v("Will start BT device discovery");
             bluetoothAdapter.startDiscovery();
+            Timber.v("Will start BT device discovery");
         } else {
             Timber.v("BT adapter is discovering hence not will not start a scan");
         }
+    }
+
+    private boolean isDeviceDiscoveryOn() {
+        return bluetoothAdapter!=null && bluetoothAdapter.isDiscovering();
     }
 
     private void cancelDiscovery() {

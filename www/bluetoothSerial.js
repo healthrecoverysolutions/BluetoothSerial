@@ -136,7 +136,7 @@ module.exports = {
     },
     
     cancelDiscovery: function () {
-        cordova.exec(success, failure, "BluetoothSerial", "cancelDiscovery", []);
+        cordova.exec(null, null, "BluetoothSerial", "cancelDiscovery", []);
     }
 
 };
