@@ -35,6 +35,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import timber.log.Timber;
+
 /**
  * PhoneGap Plugin for Serial Communication over Bluetooth
  */
@@ -64,6 +66,7 @@ public class BluetoothSerial extends CordovaPlugin {
     private static final String SET_NAME = "setName";
     private static final String SET_DISCOVERABLE = "setDiscoverable";
     private static final String UNPAIR_DEVICE ="unPairDevice";
+    private static final String CANCEL_DISCOVERY = "cancelDiscovery";
 
     // callbacks
     private CallbackContext connectCallback;
@@ -314,12 +317,15 @@ public class BluetoothSerial extends CordovaPlugin {
             cordova.startActivityForResult(this, intent, REQUEST_ENABLE_BLUETOOTH);
 
         } else if (action.equals(DISCOVER_UNPAIRED)) {
-
-            if (hasBluetoothPermissions()) {
-                discoverUnpairedDevices(callbackContext);
+            if (!isDeviceDiscoveryOn()) {
+                if (hasBluetoothPermissions()) {
+                    discoverUnpairedDevices(callbackContext);
+                } else {
+                    permissionCallback = callbackContext;
+                    requestPermissions();
+                }
             } else {
-                permissionCallback = callbackContext;
-                requestPermissions();
+                Timber.v("Device discovery in progress, not starting it again");
             }
 
         } else if (action.equals(SET_DEVICE_DISCOVERED_LISTENER)) {
@@ -347,7 +353,10 @@ public class BluetoothSerial extends CordovaPlugin {
             Log.d(TAG, "unpair devic called -- ");
             unPairDevice(args, callbackContext);
 
-        } else {
+        } else if (action.equals(CANCEL_DISCOVERY)) {
+            cancelDiscovery();
+        }
+        else {
             validAction = false;
 
         }
@@ -543,8 +552,27 @@ public class BluetoothSerial extends CordovaPlugin {
 
         filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
         activity.registerReceiver(discoverReceiver, filter);
+        // Do not start a new discovery if we already have an ongoing one
+        if(!bluetoothAdapter.isDiscovering()) {
+            bluetoothAdapter.startDiscovery();
+            Timber.v("Will start BT device discovery");
+        } else {
+            Timber.v("BT adapter is discovering hence not will not start a scan");
+        }
+    }
 
-        bluetoothAdapter.startDiscovery();
+    private boolean isDeviceDiscoveryOn() {
+        return bluetoothAdapter!=null && bluetoothAdapter.isDiscovering();
+    }
+
+    private void cancelDiscovery() {
+        if(bluetoothAdapter!=null) {
+            if(bluetoothAdapter.isDiscovering()) {
+                Timber.v("Canceling device discovery");
+                bluetoothAdapter.cancelDiscovery();
+                this.deviceDiscoveredCallback = null; // clearing device discovered callback
+            }
+        }
     }
 
     private JSONObject deviceToJSON(BluetoothDevice device) throws JSONException {
@@ -554,6 +582,20 @@ public class BluetoothSerial extends CordovaPlugin {
             json.put("name", device.getName());
             json.put("address", device.getAddress());
             json.put("id", device.getAddress());
+            int deviceType = device.getType();
+
+            if(deviceType == BluetoothDevice.DEVICE_TYPE_CLASSIC)
+            {
+                json.put("type", "DEVICE_TYPE_CLASSIC");
+            }
+            else if(deviceType == BluetoothDevice.DEVICE_TYPE_LE)
+            {
+                json.put("type", "DEVICE_TYPE_LE");
+            }
+            else if(deviceType == BluetoothDevice.DEVICE_TYPE_DUAL)
+            {
+                json.put("type", "DEVICE_TYPE_DUAL");
+            }
             if (device.getBluetoothClass() != null) {
                 json.put("class", device.getBluetoothClass().getDeviceClass());
             }
